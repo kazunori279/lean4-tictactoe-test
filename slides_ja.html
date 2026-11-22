@@ -43,12 +43,16 @@
     }
 
     .viewport {
-      width: 100vw;
+      position: fixed;
+      inset: 0;
+      width: 100%;
       height: 100vh;
+      height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 18px;
+      padding: 14px;
+      overflow: hidden;
     }
 
     .deck {
@@ -1858,17 +1862,27 @@ cd .. &amp;&amp; uv sync &amp;&amp; uv run pytest -v</pre>
         }
       });
 
+      const viewport = document.querySelector('.viewport');
       const deck = document.querySelector('.deck');
       function fitDeck() {
         const pad = 28;
+        const vw = (window.visualViewport && window.visualViewport.width) || viewport.clientWidth || window.innerWidth;
+        const vh = (window.visualViewport && window.visualViewport.height) || viewport.clientHeight || window.innerHeight;
         const scale = Math.min(
-          (window.innerWidth - pad) / 1280,
-          (window.innerHeight - pad) / 720,
+          (vw - pad) / 1280,
+          (vh - pad) / 720,
           1.25
         );
-        deck.style.transform = `scale(${Math.max(0.25, scale)})`;
+        deck.style.transform = `scale(${Math.max(0.1, scale)})`;
       }
       window.addEventListener('resize', fitDeck);
+      window.addEventListener('orientationchange', () => setTimeout(fitDeck, 100));
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', fitDeck);
+      }
+      if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(fitDeck).observe(viewport);
+      }
       fitDeck();
 
       const hashIdx = parseInt(location.hash.replace('#', ''), 10);
