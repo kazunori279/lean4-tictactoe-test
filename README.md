@@ -32,17 +32,10 @@ Instead of trying to formally verify dynamic Python code directly, we prove core
 
 ## Interactive Slides
 
-Two self-contained HTML slide decks (20 slides each, with inline SVG diagrams and keyboard navigation `←` / `→` / `Space`):
+Two self-contained HTML slide decks (20 slides each, with inline SVG diagrams and keyboard navigation `←` / `→` / `Space`) published via GitHub Pages:
 
-- **English**: [`slides.html`](slides.html)
-- **Japanese**: [`slides_ja.html`](slides_ja.html)
-
-To view locally:
-
-```bash
-uv run python -m http.server 8789 --bind 127.0.0.1
-# Open http://127.0.0.1:8789/slides.html or http://127.0.0.1:8789/slides_ja.html
-```
+- **English**: <https://kazunori279.github.io/lean4-tictactoe-test/> ([`slides.html`](slides.html))
+- **Japanese**: <https://kazunori279.github.io/lean4-tictactoe-test/slides_ja.html> ([`slides_ja.html`](slides_ja.html))
 
 ---
 
