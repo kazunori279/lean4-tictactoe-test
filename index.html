@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lean 4 + Python Differential Testing — Slides</title>
+  <noscript>
+    <meta http-equiv="refresh" content="0; url=slides.html" />
+  </noscript>
+  <script>
+    (function () {
+      var hash = window.location.hash || '';
+      var saved = null;
+      try {
+        saved = window.localStorage.getItem('slides_lang');
+      } catch (e) {}
+
+      var isJa = false;
+      if (saved === 'ja') {
+        isJa = true;
+      } else if (saved === 'en') {
+        isJa = false;
+      } else {
+        var langs = navigator.languages && navigator.languages.length
+          ? navigator.languages
+          : [navigator.language || navigator.userLanguage || 'en'];
+        for (var i = 0; i < langs.length; i++) {
+          var l = String(langs[i] || '').toLowerCase();
+          if (l === 'ja' || l.indexOf('ja-') === 0) {
+            isJa = true;
+            break;
+          }
+          if (l === 'en' || l.indexOf('en-') === 0) {
+            isJa = false;
+            break;
+          }
+        }
+      }
+
+      window.location.replace((isJa ? 'slides_ja.html' : 'slides.html') + hash);
+    })();
+  </script>
+</head>
+<body>
+  <p>Redirecting to slides... <a href="slides.html">English</a> / <a href="slides_ja.html">日本語</a></p>
+</body>
+</html>

@@ -1845,6 +1845,38 @@ cd .. &amp;&amp; uv sync &amp;&amp; uv run pytest -v</pre>
 
       prevBtn.addEventListener('click', () => render(current - 1));
       nextBtn.addEventListener('click', () => render(current + 1));
+      langSwitch.addEventListener('click', () => {
+        try { window.localStorage.setItem('slides_lang', 'en'); } catch (e) {}
+      });
+
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchActive = false;
+      document.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) {
+          touchActive = false;
+          return;
+        }
+        const pre = e.target.closest && e.target.closest('pre');
+        if (pre && pre.scrollWidth > pre.clientWidth) {
+          touchActive = false;
+          return;
+        }
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchActive = true;
+      }, { passive: true });
+
+      document.addEventListener('touchend', (e) => {
+        if (!touchActive || e.changedTouches.length !== 1) return;
+        touchActive = false;
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+          if (dx < 0) render(current + 1);
+          else render(current - 1);
+        }
+      }, { passive: true });
 
       document.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
