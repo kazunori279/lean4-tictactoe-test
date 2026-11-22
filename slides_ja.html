@@ -1,0 +1,1879 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lean 4 + Python Differential Testing — 技術解説スライド</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --g-blue: #4F46E5;
+      --g-blue-dark: #4338CA;
+      --g-blue-bg: #EEF2FF;
+      --g-red: #E11D48;
+      --g-red-bg: #FFF1F2;
+      --g-yellow: #F59E0B;
+      --g-yellow-dark: #B45309;
+      --g-yellow-bg: #FFFBEB;
+      --g-green: #0D9488;
+      --g-green-dark: #0F766E;
+      --g-green-bg: #F0FDFA;
+      --ink-1: #0F172A;
+      --ink-2: #475569;
+      --ink-3: #64748B;
+      --surface: #FFFFFF;
+      --surface-alt: #F8FAFC;
+      --border: #E2E8F0;
+      --code-bg: #0F172A;
+      --code-fg: #E2E8F0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      background: #E2E8F0;
+      color: var(--ink-1);
+      font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .viewport {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+
+    .deck {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      flex-shrink: 0;
+      transform-origin: center center;
+      background: var(--surface);
+      border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(32, 33, 36, 0.14), 0 2px 8px rgba(32, 33, 36, 0.06);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .top-stripe {
+      height: 5px;
+      width: 100%;
+      background: linear-gradient(90deg, #4F46E5 0%, #0EA5E9 55%, #0D9488 100%);
+      flex-shrink: 0;
+    }
+
+    .slides {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 34px 46px 26px;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(28px);
+      transition: opacity 0.28s ease, transform 0.28s ease;
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
+
+    .slide.prev {
+      transform: translateX(-28px);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--g-blue-dark);
+      margin-bottom: 8px;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .pill-blue { background: var(--g-blue-bg); color: var(--g-blue-dark); }
+    .pill-green { background: var(--g-green-bg); color: var(--g-green-dark); }
+    .pill-yellow { background: var(--g-yellow-bg); color: var(--g-yellow-dark); }
+    .pill-red { background: var(--g-red-bg); color: var(--g-red); }
+
+    h1 {
+      font-size: 38px;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      color: var(--ink-1);
+    }
+
+    h2 {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.28;
+      letter-spacing: -0.015em;
+      color: var(--ink-1);
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 14.5px;
+      color: var(--ink-2);
+      line-height: 1.55;
+      margin-bottom: 16px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      flex: 1;
+      min-height: 0;
+      align-items: stretch;
+    }
+
+    .grid-2-wide {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 24px;
+      flex: 1;
+      min-height: 0;
+      align-items: stretch;
+    }
+
+    .card {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .card-white {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      box-shadow: 0 1px 3px rgba(60, 64, 67, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .card h3, .card-white h3 {
+      font-size: 15.5px;
+      font-weight: 700;
+      color: var(--ink-1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card p, .card li, .card-white p, .card-white li {
+      font-size: 13.2px;
+      line-height: 1.6;
+      color: var(--ink-2);
+    }
+
+    ul.clean {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    ul.clean li {
+      position: relative;
+      padding-left: 18px;
+    }
+
+    ul.clean li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 8px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--g-blue);
+    }
+
+    ul.clean.green li::before { background: var(--g-green); }
+    ul.clean.red li::before { background: var(--g-red); }
+    ul.clean.yellow li::before { background: var(--g-yellow-dark); }
+
+    .code-box {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #30363D;
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+
+    .code-header {
+      background: #282C34;
+      padding: 7px 14px;
+      font-size: 11.5px;
+      color: #9AA0A6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #353B45;
+    }
+
+    .code-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .code-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .code-dots span:nth-child(1) { background: var(--g-red); }
+    .code-dots span:nth-child(2) { background: var(--g-yellow); }
+    .code-dots span:nth-child(3) { background: var(--g-green); }
+
+    pre {
+      padding: 13px 16px;
+      font-size: 11.8px;
+      line-height: 1.52;
+      overflow-x: auto;
+      margin: 0;
+      white-space: pre;
+    }
+
+    .kw { color: #8AB4F8; font-weight: 500; }
+    .ty { color: #FDD663; }
+    .fn { color: #81C995; }
+    .st { color: #F28B82; }
+    .cm { color: #9AA0A6; font-style: italic; }
+    .num { color: #C58AF9; }
+
+    code.inline {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.8px;
+      background: #F1F5F9;
+      color: var(--g-blue-dark);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    .svg-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+    }
+    .svg-box svg {
+      max-width: 100%;
+      max-height: 100%;
+      height: auto;
+    }
+
+    .callout {
+      display: block;
+      padding: 11px 16px;
+      border-radius: 10px;
+      background: var(--g-blue-bg);
+      border-left: 4px solid var(--g-blue-dark);
+      font-size: 12.8px;
+      line-height: 1.6;
+      color: var(--ink-1);
+      margin-top: 10px;
+    }
+    .callout.green { background: var(--g-green-bg); border-left-color: var(--g-green); }
+    .callout.yellow { background: var(--g-yellow-bg); border-left-color: var(--g-yellow-dark); }
+
+    .title-slide {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 32px;
+      align-items: center;
+      height: 100%;
+    }
+    .title-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    .footer {
+      height: 46px;
+      padding: 0 28px;
+      border-top: 1px solid var(--border);
+      background: var(--surface-alt);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      font-size: 12px;
+      color: var(--ink-2);
+    }
+
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+
+    .dot-group {
+      display: inline-flex;
+      gap: 4px;
+    }
+    .dot-group i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: block;
+    }
+
+    .nav-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-btn, .lang-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--ink-1);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      font-family: inherit;
+      text-decoration: none;
+    }
+    .nav-btn:hover:not(:disabled), .lang-btn:hover {
+      background: var(--g-blue-bg);
+      border-color: var(--g-blue);
+      color: var(--g-blue-dark);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .progress-track {
+      width: 130px;
+      height: 5px;
+      background: #E0E3E7;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--g-blue-dark);
+      transition: width 0.25s ease;
+    }
+
+    .slide-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      min-width: 48px;
+      text-align: right;
+      color: var(--ink-2);
+    }
+  </style>
+</head>
+<body>
+  <div class="viewport">
+    <div class="deck">
+      <div class="top-stripe"></div>
+
+      <div class="slides" id="slides">
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 1: TITLE -->
+        <!-- ============================================================ -->
+        <section class="slide active">
+          <div class="title-slide">
+            <div>
+              <div class="eyebrow">
+                <span class="pill pill-blue">形式検証 × ソフトウェアテスト</span>
+              </div>
+              <h1>Lean 4 + Python<br/>Differential Testing 入門</h1>
+              <p class="subtitle" style="margin-top: 16px; font-size: 15.5px;">
+                <strong>Lean 4 の Executable Specification（実行可能な仕様）</strong>と<strong>形式証明</strong>を、
+                Python アプリケーションの「数学的に保証された Test Oracle」として活用する手法を、
+                Tic-Tac-Toe サンプルで 1 ステップずつ解説します。
+              </p>
+              <div class="title-meta">
+                <span class="pill pill-blue">Lean 4.22+</span>
+                <span class="pill pill-green">Python 3.12 + uv</span>
+                <span class="pill pill-yellow">pytest + Hypothesis</span>
+                <span class="pill pill-red">JSON Lines Oracle</span>
+              </div>
+              <div style="margin-top: 18px; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); font-weight: 500;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                <a href="https://x.com/kazunori_279" target="_blank" rel="noopener" style="color: var(--ink-1); text-decoration: none; font-weight: 600;">@kazunori_279</a>
+              </div>
+              <div class="callout" style="margin-top: 16px;">
+                <strong>コアコンセプト:</strong> 簡潔な Lean 4 仕様の不変条件を証明し、本番 Python コードとの一致を大量のランダムテストで自動検証する。
+              </div>
+            </div>
+
+            <div class="svg-box">
+              <svg viewBox="0 0 460 400" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <filter id="sh1" x="-10%" y="-10%" width="120%" height="120%">
+                    <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#0F172A" flood-opacity="0.08"/>
+                  </filter>
+                  <marker id="arrBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#4338CA"/>
+                  </marker>
+                  <marker id="arrGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#0D9488"/>
+                  </marker>
+                </defs>
+
+                <circle cx="230" cy="200" r="170" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+
+                <!-- Top Card: Lean 4 -->
+                <rect x="35" y="28" width="180" height="118" rx="14" fill="#FFFFFF" stroke="#4F46E5" stroke-width="2" filter="url(#sh1)"/>
+                <rect x="35" y="28" width="180" height="30" rx="14" fill="#EEF2FF"/>
+                <rect x="35" y="44" width="180" height="14" fill="#EEF2FF"/>
+                <text x="125" y="48" text-anchor="middle" font-size="11.5" font-weight="700" fill="#4338CA">LEAN 4 仕様 &amp; 証明</text>
+                <text x="125" y="80" text-anchor="middle" font-size="12" fill="#0F172A" font-weight="600">Executable Model</text>
+                <text x="125" y="100" text-anchor="middle" font-size="10.5" fill="#475569">Kernel で不変条件を証明</text>
+                <rect x="58" y="114" width="134" height="20" rx="10" fill="#F0FDFA"/>
+                <text x="125" y="128" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0F766E">✓ 正解 Test Oracle</text>
+
+                <!-- Top Right Card: Python -->
+                <rect x="245" y="28" width="180" height="118" rx="14" fill="#FFFFFF" stroke="#0D9488" stroke-width="2" filter="url(#sh1)"/>
+                <rect x="245" y="28" width="180" height="30" rx="14" fill="#F0FDFA"/>
+                <rect x="245" y="44" width="180" height="14" fill="#F0FDFA"/>
+                <text x="335" y="48" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0F766E">PYTHON 本番コード</text>
+                <text x="335" y="80" text-anchor="middle" font-size="12" fill="#0F172A" font-weight="600">tictactoe/game.py</text>
+                <text x="335" y="100" text-anchor="middle" font-size="10.5" fill="#475569">通常の Python 実装</text>
+                <rect x="268" y="114" width="134" height="20" rx="10" fill="#FFFBEB"/>
+                <text x="335" y="128" text-anchor="middle" font-size="10.5" font-weight="700" fill="#B45309">テスト対象 (SUT)</text>
+
+                <!-- Center: Tic-Tac-Toe Board + Hypothesis -->
+                <rect x="130" y="218" width="200" height="148" rx="14" fill="#FFFFFF" stroke="#F59E0B" stroke-width="2" filter="url(#sh1)"/>
+                <text x="230" y="242" text-anchor="middle" font-size="12" font-weight="700" fill="#B45309">DIFFERENTIAL TESTING</text>
+                <text x="230" y="258" text-anchor="middle" font-size="10.5" fill="#475569">pytest + Hypothesis（数千ケース）</text>
+
+                <!-- Mini Tic-Tac-Toe Grid -->
+                <g transform="translate(185, 272)">
+                  <line x1="30" y1="0" x2="30" y2="82" stroke="#CBD5E1" stroke-width="2.5"/>
+                  <line x1="60" y1="0" x2="60" y2="82" stroke="#CBD5E1" stroke-width="2.5"/>
+                  <line x1="0" y1="27" x2="90" y2="27" stroke="#CBD5E1" stroke-width="2.5"/>
+                  <line x1="0" y1="55" x2="90" y2="55" stroke="#CBD5E1" stroke-width="2.5"/>
+                  <text x="15" y="20" text-anchor="middle" font-size="16" font-weight="700" fill="#4F46E5">X</text>
+                  <text x="45" y="20" text-anchor="middle" font-size="16" font-weight="700" fill="#4F46E5">X</text>
+                  <text x="75" y="20" text-anchor="middle" font-size="16" font-weight="700" fill="#4F46E5">X</text>
+                  <line x1="6" y1="14" x2="84" y2="14" stroke="#4F46E5" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+                  <text x="15" y="47" text-anchor="middle" font-size="16" font-weight="700" fill="#E11D48">O</text>
+                  <text x="45" y="47" text-anchor="middle" font-size="16" font-weight="700" fill="#E11D48">O</text>
+                </g>
+
+                <path d="M 125 148 L 125 182 L 195 182 L 195 212" fill="none" stroke="#4338CA" stroke-width="2.2" marker-end="url(#arrBlue)"/>
+                <path d="M 335 148 L 335 182 L 265 182 L 265 212" fill="none" stroke="#0D9488" stroke-width="2.2" marker-end="url(#arrGreen)"/>
+
+                <circle cx="230" cy="182" r="16" fill="#0F172A"/>
+                <text x="230" y="187" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">==</text>
+              </svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 2: WHY TRADITIONAL TESTING ISN'T ENOUGH (BEFORE) -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">01 / 背景・課題</div>
+          <h2>従来のテストだけでは埋められない品質ギャップ</h2>
+          <p class="subtitle">Unit Test は「思いついたケース」しか検証できず、Property-Based Testing へ進んでもまだ壁が残ります。</p>
+
+          <div class="grid-2-wide">
+            <div class="svg-box">
+              <svg viewBox="0 0 600 390" xmlns="http://www.w3.org/2000/svg">
+                <line x1="55" y1="340" x2="570" y2="340" stroke="#475569" stroke-width="2"/>
+                <line x1="55" y1="340" x2="55" y2="28" stroke="#475569" stroke-width="2"/>
+                <text x="310" y="374" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">状態空間のカバレッジ・信頼度 →</text>
+                <text x="22" y="185" text-anchor="middle" font-size="12" font-weight="700" fill="#475569" transform="rotate(-90 22 185)">数学的厳密さ →</text>
+
+                <rect x="85" y="255" width="148" height="68" rx="10" fill="#FFF1F2" stroke="#E11D48" stroke-width="1.8"/>
+                <text x="159" y="280" text-anchor="middle" font-size="13" font-weight="700" fill="#BE123C">Unit Test</text>
+                <text x="159" y="298" text-anchor="middle" font-size="11" fill="#475569">通常の pytest 例題</text>
+                <text x="159" y="313" text-anchor="middle" font-size="10.5" fill="#475569">想定済みの入力のみ確認</text>
+
+                <rect x="215" y="165" width="180" height="72" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+                <text x="305" y="191" text-anchor="middle" font-size="13" font-weight="700" fill="#B45309">Property-Based Testing</text>
+                <text x="305" y="209" text-anchor="middle" font-size="11" fill="#475569">Hypothesis</text>
+                <text x="305" y="224" text-anchor="middle" font-size="10.5" fill="#475569">数千のランダム入力＋shrinking</text>
+
+                <rect x="355" y="55" width="205" height="82" rx="10" fill="#F8FAFC" stroke="#BDC1C6" stroke-width="2" stroke-dasharray="6,4"/>
+                <text x="457" y="88" text-anchor="middle" font-size="13" font-weight="700" fill="#64748B">? 埋まらないギャップ</text>
+                <text x="457" y="108" text-anchor="middle" font-size="11" fill="#64748B">全入力 (∀) の数学的保証がない</text>
+                <text x="457" y="124" text-anchor="middle" font-size="10.5" fill="#64748B">信頼できる Test Oracle がない</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="card-white">
+                <h3><span class="pill pill-red">限界 1</span> Unit Test は想定外を見逃す</h3>
+                <p>例題ベースのテストは開発者が意識したケースしか守れません。複雑な状態遷移や境界条件のバグがすり抜けます。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">次の一手</span> Property-Based Testing</h3>
+                <p><strong>Hypothesis</strong> を使えば数千の入力を自動生成できます。まずはその仕組みと、残る課題（<strong>Test Oracle 問題</strong>）を見ていきましょう。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 3: INTRODUCTION TO HYPOTHESIS -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">01b / Property-Based Testing 入門</div>
+          <h2>Hypothesis とは？Python の Property-Based Testing</h2>
+          <p class="subtitle">固定のテストケースを手書きする代わりに、入力の<strong>生成戦略 (Strategy)</strong> と満たすべき性質を宣言し、エッジケースを自動探索します。</p>
+
+          <div class="grid-2">
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div class="svg-box" style="height: 205px;">
+                <svg viewBox="0 0 540 205" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <marker id="arrH1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+                    </marker>
+                    <marker id="arrHR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                      <path d="M 0 1 L 10 5 L 0 9 z" fill="#E11D48"/>
+                    </marker>
+                  </defs>
+
+                  <rect x="8" y="16" width="150" height="72" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.8"/>
+                  <text x="83" y="42" text-anchor="middle" font-size="12" font-weight="700" fill="#B45309">1. Strategy</text>
+                  <text x="83" y="60" text-anchor="middle" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#0F172A">st.lists(0..11)</text>
+                  <text x="83" y="76" text-anchor="middle" font-size="10" fill="#475569">入力の形・範囲を宣言</text>
+
+                  <line x1="158" y1="52" x2="190" y2="52" stroke="#475569" stroke-width="2" marker-end="url(#arrH1)"/>
+
+                  <rect x="195" y="16" width="150" height="72" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.8"/>
+                  <text x="270" y="42" text-anchor="middle" font-size="12" font-weight="700" fill="#4338CA">2. 自動生成</text>
+                  <text x="270" y="60" text-anchor="middle" font-size="10.5" fill="#0F172A">数百〜数千の入力</text>
+                  <text x="270" y="76" text-anchor="middle" font-size="10" fill="#475569">空・重複・境界値も網羅</text>
+
+                  <line x1="345" y1="52" x2="377" y2="52" stroke="#475569" stroke-width="2" marker-end="url(#arrH1)"/>
+
+                  <rect x="382" y="16" width="150" height="72" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.8"/>
+                  <text x="457" y="42" text-anchor="middle" font-size="12" font-weight="700" fill="#0F766E">3. 性質を検証</text>
+                  <text x="457" y="60" text-anchor="middle" font-size="10.5" fill="#0F172A">Python 関数を実行</text>
+                  <text x="457" y="76" text-anchor="middle" font-size="10" fill="#475569">不変条件 / Oracle と比較</text>
+
+                  <path d="M 457 88 L 457 116 L 270 116 L 270 124" fill="none" stroke="#E11D48" stroke-width="2" marker-end="url(#arrHR)"/>
+                  <text x="382" y="110" text-anchor="middle" font-size="10.5" font-weight="700" fill="#BE123C">失敗時 → 自動 Shrinking</text>
+
+                  <rect x="32" y="128" width="476" height="64" rx="10" fill="#FFF1F2" stroke="#E11D48" stroke-width="1.6"/>
+                  <text x="270" y="150" text-anchor="middle" font-size="11.5" font-weight="700" fill="#BE123C">4. 最小の反例を出力（.hypothesis DB に自動保存）</text>
+                  <text x="270" y="172" text-anchor="middle" font-size="11" font-family="JetBrains Mono, monospace" fill="#0F172A">[11, 2, 0, 7, 4, 1, 6, 8]  ──shrink──▶  [2, 0, 4, 1, 6]</text>
+                </svg>
+              </div>
+
+              <div class="code-box">
+                <div class="code-header">
+                  <div class="code-dots"><span></span><span></span><span></span></div>
+                  <span>Hypothesis の最小コード例</span>
+                </div>
+                <pre><span class="kw">from</span> hypothesis <span class="kw">import</span> given, strategies <span class="kw">as</span> st
+
+<span class="kw">@given</span>(xs=st.lists(st.integers()))
+<span class="kw">def</span> <span class="fn">test_sort_idempotent</span>(xs):
+    <span class="kw">assert</span> sorted(sorted(xs)) == sorted(xs)</pre>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div class="card-white">
+                <h3><span class="pill pill-green">メリット</span> Hypothesis が強力な理由</h3>
+                <ul class="clean green">
+                  <li><strong>見落としがちな境界値を発見:</strong> 空配列・重複・極端な数値など、人間が思いつかない入力を自動で試す。</li>
+                  <li><strong>自動 Shrinking:</strong> 複雑な失敗入力を、人間が原因を追いやすい最小の再現手順まで自動で縮小。</li>
+                  <li><strong>回帰テストの記憶:</strong> 過去の失敗例を <code class="inline">.hypothesis/</code> に保存し、次回から優先的に再検証。</li>
+                </ul>
+              </div>
+
+              <div class="card-white">
+                <h3><span class="pill pill-red">弱点・限界</span> Hypothesis 単体の課題</h3>
+                <ul class="clean red">
+                  <li><strong>Test Oracle 問題:</strong> 入力生成は簡単だが、「正確な期待出力」を判定するには結局テスト側にも仕様を書く必要がある。</li>
+                  <li><strong>確率的であり網羅証明ではない:</strong> 500 回通っても、試していないコーナーケースにバグが残る可能性をゼロにはできない。</li>
+                  <li><strong>Strategy 設計コスト:</strong> 複雑なドメインでは有効な状態を作るカスタム generator の工夫が必要。</li>
+                </ul>
+              </div>
+
+              <div class="callout">
+                <strong>Lean 4 への橋渡し:</strong> 入力生成と shrinking は Hypothesis が最強。その最大の弱点である<strong>「Test Oracle 問題と数学的保証」</strong>を Lean 4 で補完します。
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 4: BRIDGING THE GAP WITH FORMAL VERIFICATION (AFTER) -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">01c / ギャップを埋める</div>
+          <h2>形式検証を加えるとテストはどう進化するか？</h2>
+          <p class="subtitle"><strong>Lean 4 の実行可能な仕様</strong>を右上に配置することで、Hypothesis の弱点（Oracle 問題）を解消し、実務のスイートスポットに到達します。</p>
+
+          <div class="grid-2-wide">
+            <div class="svg-box">
+              <svg viewBox="0 0 600 390" xmlns="http://www.w3.org/2000/svg">
+                <line x1="55" y1="340" x2="570" y2="340" stroke="#475569" stroke-width="2"/>
+                <line x1="55" y1="340" x2="55" y2="28" stroke="#475569" stroke-width="2"/>
+                <text x="310" y="374" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">状態空間のカバレッジ・信頼度 →</text>
+                <text x="22" y="185" text-anchor="middle" font-size="12" font-weight="700" fill="#475569" transform="rotate(-90 22 185)">数学的厳密さ →</text>
+
+                <rect x="85" y="255" width="148" height="68" rx="10" fill="#FFF1F2" stroke="#E11D48" stroke-width="1.8" opacity="0.7"/>
+                <text x="159" y="280" text-anchor="middle" font-size="13" font-weight="700" fill="#BE123C">Unit Test</text>
+                <text x="159" y="298" text-anchor="middle" font-size="11" fill="#475569">通常の pytest 例題</text>
+                <text x="159" y="313" text-anchor="middle" font-size="10.5" fill="#475569">想定済みの入力のみ確認</text>
+
+                <rect x="215" y="165" width="180" height="72" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.8"/>
+                <text x="305" y="191" text-anchor="middle" font-size="13" font-weight="700" fill="#B45309">Property-Based Testing</text>
+                <text x="305" y="209" text-anchor="middle" font-size="11" fill="#475569">Hypothesis / Plausible</text>
+                <text x="305" y="224" text-anchor="middle" font-size="10.5" fill="#475569">数千のランダム入力＋shrinking</text>
+
+                <rect x="355" y="55" width="205" height="82" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2.6"/>
+                <text x="457" y="82" text-anchor="middle" font-size="13.5" font-weight="700" fill="#4338CA">形式検証 (Formal Proof)</text>
+                <text x="457" y="101" text-anchor="middle" font-size="11.5" fill="#0F172A">Lean 4 Executable Spec</text>
+                <text x="457" y="118" text-anchor="middle" font-size="10.5" fill="#4338CA" font-weight="600">すべての入力 (∀) に対し証明</text>
+
+                <path d="M 395 200 C 442 200, 457 170, 457 140" fill="none" stroke="#0D9488" stroke-width="3.2" stroke-dasharray="6,4"/>
+                <rect x="388" y="218" width="180" height="58" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="2.4"/>
+                <text x="478" y="241" text-anchor="middle" font-size="12" font-weight="700" fill="#0F766E">実務のスイートスポット</text>
+                <text x="478" y="259" text-anchor="middle" font-size="11" fill="#0F172A">Lean 4 Oracle + Hypothesis</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="card-white">
+                <h3><span class="pill pill-red">解決</span> Test Oracle 問題からの解放</h3>
+                <p>Python テスト側に期待値ロジックを重複実装する代わりに、<strong>数学的に証明済みの Lean 4 モデル</strong>と直接出力を突き合わせます。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-blue">進化</span> 形式検証がもたらす価値</h3>
+                <ul class="clean">
+                  <li><strong>仕様の確実性:</strong> 重要な不変条件をサンプリングではなく全入力 (∀) に対して証明。</li>
+                  <li><strong>バグの重複防止:</strong> 独立した簡潔なモデルが信頼できる正解になる。</li>
+                  <li><strong>いいとこ取り:</strong> 探索力は Hypothesis、正解の厳密さは Lean 4 が担当。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 5: REAL-WORLD USE CASES & PROVEN BENEFITS -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">01d / 実世界の活用事例</div>
+          <h2>Lean 4 × Differential Testing の代表事例と実証された効果</h2>
+          <p class="subtitle">Executable Specification + Differential Testing は、すでに大規模な本番システムで明確な成果を上げています。</p>
+
+          <!-- Featured Case: AWS Cedar -->
+          <div class="card-white" style="border-left: 5px solid var(--g-blue-dark); margin-bottom: 14px; padding: 14px 20px;">
+            <div style="display:grid; grid-template-columns: 1.35fr 0.65fr; gap: 18px; align-items: center;">
+              <div>
+                <h3 style="margin-bottom: 6px;"><span class="pill pill-blue">代表事例</span> AWS Cedar — 認可ポリシーエンジン</h3>
+                <p>AWS Verified Permissions を支える認可言語 Cedar では、評価器・バリデータの仕様を <strong>Lean 4</strong> で書き、本番実装を <strong>Rust</strong> で開発。両者を大規模な <strong>Differential Random Testing</strong> で継続的に突き合わせています。</p>
+                <p style="margin-top: 6px;"><strong>実証された効果:</strong> 「<code class="inline">forbid</code> は常に <code class="inline">permit</code> より優先される」等のセキュリティ不変条件を数学的に証明しつつ、本番リリース前に実装の微細なバグを多数検出。</p>
+              </div>
+              <div class="svg-box">
+                <svg viewBox="0 0 320 112" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="4" y="4" width="148" height="48" rx="9" fill="#EEF2FF" stroke="#4F46E5"/>
+                  <text x="78" y="25" text-anchor="middle" font-size="14" font-weight="700" fill="#4338CA">約 5〜6 µs</text>
+                  <text x="78" y="42" text-anchor="middle" font-size="10" fill="#475569">Lean 4 仕様の評価速度</text>
+
+                  <rect x="164" y="4" width="152" height="48" rx="9" fill="#F0FDFA" stroke="#0D9488"/>
+                  <text x="240" y="25" text-anchor="middle" font-size="14" font-weight="700" fill="#0F766E">毎晩 1,000万回+</text>
+                  <text x="240" y="42" text-anchor="middle" font-size="10" fill="#475569">Differential Random Test</text>
+
+                  <rect x="4" y="60" width="312" height="46" rx="9" fill="#FFFBEB" stroke="#F59E0B"/>
+                  <text x="160" y="80" text-anchor="middle" font-size="11.5" font-weight="700" fill="#B45309">仕様と本番実装のドリフトをゼロに</text>
+                  <text x="160" y="96" text-anchor="middle" font-size="10" fill="#475569">Rust の高速性 × Lean 4 の数学的保証を両立</text>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3 Other Real-World Domains -->
+          <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 16px; flex: 1; min-height: 0;">
+            <div class="card">
+              <h3><span class="pill pill-green">FinTech・課金・台帳</span></h3>
+              <p><strong>用途:</strong> 割引重複ルール、手数料計算、クォータ制御、複式簿記台帳。</p>
+              <ul class="clean green">
+                <li>「残高が負にならない」「貸借一致」等の保存則を Lean 4 で証明。</li>
+                <li>Hypothesis で複雑な割引・境界条件バグを Python 側から検出。</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3><span class="pill pill-blue">コンパイラ・ML IR</span></h3>
+              <p><strong>用途:</strong> クエリ最適化、DSL 変換器、ニューラルネットの lowering pass。</p>
+              <ul class="clean">
+                <li>変換前後の意味的等価性を Lean 4（<code class="inline">grind</code> / <code class="inline">bv_decide</code>）で証明。</li>
+                <li>Python ハーネスで数千の AST を流し、サイレント誤コンパイルを防止。</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3><span class="pill pill-yellow">AI Coding Agent</span></h3>
+              <p><strong>用途:</strong> AI 生成コードの検証・移行・エージェントのガードレール（2025〜2026）。</p>
+              <ul class="clean yellow">
+                <li>Agent が Python 実装と同時に Lean 4 仕様・証明を生成。</li>
+                <li>Lean kernel + Hypothesis がマージ前の決定的な品質ゲートになる。</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 6: LEAN 4 BASICS -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">02 / Lean 4 の基礎</div>
+          <h2>なぜ Lean 4 はソフトウェアテストに向いているのか？</h2>
+          <p class="subtitle">Lean 4 は「依存型関数型言語」「定理証明支援系」「高速なネイティブ C コンパイラ」を 1 つに統合しています。</p>
+
+          <div class="grid-2">
+            <div class="svg-box">
+              <svg viewBox="0 0 540 380" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <marker id="arrGray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+                  </marker>
+                </defs>
+
+                <rect x="135" y="14" width="270" height="64" rx="12" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2"/>
+                <text x="270" y="40" text-anchor="middle" font-size="13.5" font-weight="700" fill="#4338CA">単一の Lean 4 コードベース</text>
+                <text x="270" y="60" text-anchor="middle" font-size="11.5" fill="#0F172A">型定義 + 実行可能な関数 + 定理証明</text>
+
+                <path d="M 210 78 L 135 130" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+                <path d="M 330 78 L 405 130" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+                <rect x="20" y="136" width="230" height="110" rx="12" fill="#FFFFFF" stroke="#0D9488" stroke-width="2"/>
+                <rect x="20" y="136" width="230" height="28" rx="12" fill="#F0FDFA"/>
+                <rect x="20" y="150" width="230" height="14" fill="#F0FDFA"/>
+                <text x="135" y="155" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0F766E">1. TRUSTED PROOF KERNEL</text>
+                <text x="135" y="185" text-anchor="middle" font-size="12" font-weight="600" fill="#0F172A">型チェッカ &amp; 証明検証</text>
+                <text x="135" y="205" text-anchor="middle" font-size="10.5" fill="#475569">すべての theorem と #guard を検証</text>
+                <text x="135" y="223" text-anchor="middle" font-size="10.5" fill="#475569">外部ソルバを盲信しない設計</text>
+
+                <rect x="290" y="136" width="230" height="110" rx="12" fill="#FFFFFF" stroke="#F59E0B" stroke-width="2"/>
+                <rect x="290" y="136" width="230" height="28" rx="12" fill="#FFFBEB"/>
+                <rect x="290" y="150" width="230" height="14" fill="#FFFBEB"/>
+                <text x="405" y="155" text-anchor="middle" font-size="11.5" font-weight="700" fill="#B45309">2. NATIVE C COMPILER</text>
+                <text x="405" y="185" text-anchor="middle" font-size="12" font-weight="600" fill="#0F172A">IR → C → ネイティブバイナリ</text>
+                <text x="405" y="205" text-anchor="middle" font-size="10.5" fill="#475569">証明項はコンパイル時に消去</text>
+                <text x="405" y="223" text-anchor="middle" font-size="10.5" fill="#475569">マイクロ秒オーダーで高速実行</text>
+
+                <path d="M 135 246 L 135 288" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+                <path d="M 405 246 L 405 288" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+                <rect x="35" y="294" width="200" height="62" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.5"/>
+                <text x="135" y="320" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0F766E">lake test</text>
+                <text x="135" y="340" text-anchor="middle" font-size="11" fill="#0F172A">数学的な正しさの保証</text>
+
+                <rect x="305" y="294" width="200" height="62" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.5"/>
+                <text x="405" y="320" text-anchor="middle" font-size="12.5" font-weight="700" fill="#B45309">lake build</text>
+                <text x="405" y="340" text-anchor="middle" font-size="11" fill="#0F172A">高速 Test Oracle バイナリ</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="card">
+                <h3><span class="pill pill-blue">二面性</span> コードと証明を同じ言語で</h3>
+                <p>従来の証明支援系のような煩雑なコード抽出が不要。書いた仕様がそのままネイティブバイナリとして高速に動きます。</p>
+              </div>
+              <div class="card">
+                <h3><span class="pill pill-green">2025〜2026 の最新自動化スタック</span></h3>
+                <ul class="clean green">
+                  <li><code class="inline">grind</code> — SMT 着想の組み込み自動証明 tactic（等号・線形算術等）。</li>
+                  <li><code class="inline">bv_decide</code> — SAT ソルバ連携によるビット演算・オーバーフロー証明。</li>
+                  <li><code class="inline">Std.Do / mvcgen</code> — <code class="inline">do</code> 記法の命令的コードから Hoare 論理 VC を生成。</li>
+                  <li><code class="inline">Plausible</code> — QuickCheck 型の組み込み反例探索（PBT）。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 6: WHAT DOES IT MEAN TO "RUN" A SPEC? -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">02b / Lean 4 の基礎</div>
+          <h2>仕様を「実行する」とは？なぜネイティブコンパイラが必要か</h2>
+          <p class="subtitle">数学的な仕様を、入力を入れれば正解を返す<strong>超高速な「正解マシーン (Test Oracle)」</strong>に変える仕組みです。</p>
+
+          <div class="grid-2">
+            <div class="svg-box">
+              <svg viewBox="0 0 540 385" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <marker id="arrN1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#4338CA"/>
+                  </marker>
+                  <marker id="arrN2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#B45309"/>
+                  </marker>
+                </defs>
+
+                <!-- Top section: What "running" a spec means -->
+                <rect x="8" y="8" width="524" height="156" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
+                <text x="24" y="32" font-size="12" font-weight="700" fill="#4338CA">仕様を「実行する (run)」の意味</text>
+
+                <rect x="24" y="48" width="138" height="72" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+                <text x="93" y="72" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0F172A">具体的な入力</text>
+                <text x="93" y="92" text-anchor="middle" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#475569">[0, 3, 1, 4, 2]</text>
+                <text x="93" y="108" text-anchor="middle" font-size="9.5" fill="#64748B">Hypothesis が生成</text>
+
+                <line x1="162" y1="84" x2="192" y2="84" stroke="#4338CA" stroke-width="2" marker-end="url(#arrN1)"/>
+
+                <rect x="198" y="48" width="144" height="72" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2"/>
+                <text x="270" y="72" text-anchor="middle" font-size="11.5" font-weight="700" fill="#4338CA">Executable Spec</text>
+                <text x="270" y="92" text-anchor="middle" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#0F172A">playMoves</text>
+                <text x="270" y="108" text-anchor="middle" font-size="9.5" fill="#475569">計算可能な関数 (def)</text>
+
+                <line x1="342" y1="84" x2="372" y2="84" stroke="#4338CA" stroke-width="2" marker-end="url(#arrN1)"/>
+
+                <rect x="378" y="48" width="138" height="72" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.8"/>
+                <text x="447" y="72" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0F766E">仕様どおりの正解</text>
+                <text x="447" y="92" text-anchor="middle" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#0F172A">won("X")</text>
+                <text x="447" y="108" text-anchor="middle" font-size="9.5" fill="#0F766E">Ground Truth!</text>
+
+                <text x="270" y="148" text-anchor="middle" font-size="10.5" fill="#475569">静的な設計書と違い、任意の入力に対して「本来どうなるべきか」を実際に計算できる</text>
+
+                <!-- Bottom section: Native compilation pipeline -->
+                <rect x="8" y="182" width="524" height="192" rx="12" fill="#FFFBEB" fill-opacity="0.45" stroke="#F59E0B" stroke-width="1.6"/>
+                <text x="24" y="206" font-size="12" font-weight="700" fill="#B45309">ネイティブコンパイラ (lake build) の仕組みと効果</text>
+
+                <rect x="24" y="222" width="118" height="76" rx="10" fill="#FFFFFF" stroke="#4F46E5" stroke-width="1.5"/>
+                <text x="83" y="246" text-anchor="middle" font-size="11" font-weight="700" fill="#4338CA">仕様 + 証明</text>
+                <text x="83" y="264" text-anchor="middle" font-size="10" fill="#475569">def + theorem</text>
+                <text x="83" y="280" text-anchor="middle" font-size="10" fill="#475569">+ Main.lean</text>
+
+                <line x1="142" y1="260" x2="168" y2="260" stroke="#B45309" stroke-width="2" marker-end="url(#arrN2)"/>
+
+                <rect x="174" y="222" width="150" height="76" rx="10" fill="#FFFFFF" stroke="#F59E0B" stroke-width="1.8"/>
+                <text x="249" y="246" text-anchor="middle" font-size="11" font-weight="700" fill="#B45309">Proof Erasure</text>
+                <text x="249" y="264" text-anchor="middle" font-size="10" fill="#0F172A">証明項をすべて消去</text>
+                <text x="249" y="280" text-anchor="middle" font-size="10" fill="#475569">→ 最適化 C コード生成</text>
+
+                <line x1="324" y1="260" x2="350" y2="260" stroke="#B45309" stroke-width="2" marker-end="url(#arrN2)"/>
+
+                <rect x="356" y="222" width="160" height="76" rx="10" fill="#0F172A"/>
+                <text x="436" y="246" text-anchor="middle" font-size="11" font-weight="700" fill="#81C995">ネイティブバイナリ</text>
+                <text x="436" y="265" text-anchor="middle" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#FFFFFF">~5–6 µs / 回</text>
+                <text x="436" y="283" text-anchor="middle" font-size="9.5" fill="#9AA0A6">(AWS Cedar 実測値)</text>
+
+                <rect x="24" y="314" width="492" height="44" rx="8" fill="#FFFFFF" stroke="#CBD5E1"/>
+                <text x="40" y="333" font-size="10.5" font-weight="700" fill="#E11D48">インタプリタ (#eval / lean --run):</text>
+                <text x="248" y="333" font-size="10.5" fill="#475569">遅く、数万件の Fuzzing には不向き</text>
+                <text x="40" y="350" font-size="10.5" font-weight="700" fill="#0F766E">ネイティブバイナリ (lake build):</text>
+                <text x="248" y="350" font-size="10.5" fill="#0F172A" font-weight="600">秒間数千〜数万回のテストが現実的に！</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div class="card-white">
+                <h3><span class="pill pill-blue">1. 圧倒的高速性</span> 大量 Fuzzing に耐える速度</h3>
+                <p>証明にしか使わない情報（proof terms）は<strong>コンパイル時に消去</strong>され、純粋な計算だけが高速な C バイナリになります。AWS Cedar では 1 評価あたり数マイクロ秒で動作します。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-green">2. コード抽出不要</span> 変換ズレの罠がない</h3>
+                <p>従来の証明支援系（Coq 等）は実行のために OCaml/Haskell へ変換が必要でした。Lean 4 は<strong>証明した関数そのもの</strong>に <code class="inline">Json</code> や <code class="inline">IO</code> を付けて直接ビルドできます。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">3. 単体実行</span> CI への組み込みがシンプル</h3>
+                <p>ビルド済みの <code class="inline">tictactoe_oracle</code> は単体バイナリのため、テスト実行時に Lean 処理系を起動する必要がなく、<code class="inline">pytest</code> から普通の CLI として呼べます。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 7: LEAN 4 BUILDING BLOCKS -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">02 / Lean 4 の基礎</div>
+          <h2>60 秒でわかる Lean 4 の 5 大構文</h2>
+          <p class="subtitle">ソフトウェア仕様を書くのに必要な構文は、実質この 5 つだけで 9 割カバーできます。</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>Lean 4 クイックリファレンス</span>
+              </div>
+              <pre><span class="cm">-- 1. 代数的データ型 (Enum / Tagged Union)</span>
+<span class="kw">inductive</span> <span class="ty">Player</span> <span class="kw">where</span>
+  | X | O
+  <span class="kw">deriving</span> <span class="ty">BEq</span>, <span class="ty">DecidableEq</span>, <span class="ty">Repr</span>
+
+<span class="cm">-- 2. 構造体 (Python の dataclass 相当)</span>
+<span class="kw">structure</span> <span class="ty">GameState</span> <span class="kw">where</span>
+  board  : <span class="ty">List</span> (<span class="ty">Option</span> <span class="ty">Player</span>)
+  turn   : <span class="ty">Player</span>
+  status : <span class="ty">GameStatus</span>
+
+<span class="cm">-- 3. 純粋な実行可能関数</span>
+<span class="kw">def</span> <span class="fn">Player.other</span> : <span class="ty">Player</span> → <span class="ty">Player</span>
+  | .X => .O
+  | .O => .X
+
+<span class="cm">-- 4. 定理（ビルド時に Lean kernel が厳密に検証）</span>
+<span class="kw">theorem</span> <span class="fn">other_involutive</span> (p : <span class="ty">Player</span>) :
+    p.other.other = p := <span class="kw">by</span>
+  <span class="kw">cases</span> p &lt;;&gt; <span class="kw">rfl</span>
+
+<span class="cm">-- 5. コンパイル時アサーション（偽ならビルド失敗）</span>
+<span class="kw">#guard</span> <span class="ty">Player</span>.X.other == .O</pre>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div class="card-white">
+                <h3><span class="pill pill-blue">inductive &amp; structure</span></h3>
+                <p>ドメインモデルを厳密な型で定義。X / O 以外の不正なプレイヤーなど、あり得ない状態を型レベルで排除します。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-green">def &amp; Except</span></h3>
+                <p>関数はデフォルトで純粋。例外を投げる代わりに <code class="inline">Except String GameState</code> を返し、エラー経路をすべて明示します。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">theorem &amp; #guard</span></h3>
+                <p><strong><code class="inline">theorem</code></strong> は全入力に対する普遍的性質を証明。<strong><code class="inline">#guard</code></strong> は具体例をコンパイル時に自動チェックします（<code class="inline">lake test</code>）。</p>
+              </div>
+              <div class="callout">
+                <strong>ツールチェーン:</strong> <code class="inline">elan</code> + <code class="inline">lake</code> で管理（Rust の <code class="inline">rustup</code> + <code class="inline">cargo</code>、Python の <code class="inline">uv</code> に相当）。
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 5: COMBINING WITH PYTHON (VGD) -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">03 / 基本コンセプト</div>
+          <h2>Python × Lean 4: Verification-Guided Development</h2>
+          <p class="subtitle">動的型付けの Python 本番コードを直接証明しようとせず、「証明済みの Lean 4 仕様」と Differential Testing で同期を取ります。</p>
+
+          <div class="svg-box" style="height: 325px;">
+            <svg viewBox="0 0 1120 315" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <marker id="arrB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#4338CA"/>
+                </marker>
+                <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#0D9488"/>
+                </marker>
+              </defs>
+
+              <rect x="16" y="88" width="224" height="136" rx="14" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+              <text x="128" y="116" text-anchor="middle" font-size="13" font-weight="700" fill="#B45309">1. HYPOTHESIS</text>
+              <text x="128" y="140" text-anchor="middle" font-size="12" font-weight="600" fill="#0F172A">ランダム入力ジェネレータ</text>
+              <text x="128" y="162" text-anchor="middle" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#475569">moves = [0, 4, 1, 9, 2]</text>
+              <text x="128" y="182" text-anchor="middle" font-size="10.5" fill="#475569">• 範囲外・重複手も自動生成</text>
+              <text x="128" y="200" text-anchor="middle" font-size="10.5" fill="#475569">• 失敗時は最小反例へ縮小</text>
+
+              <path d="M 240 130 L 315 78" fill="none" stroke="#4338CA" stroke-width="2.4" marker-end="url(#arrB)"/>
+              <path d="M 240 182 L 315 234" fill="none" stroke="#0D9488" stroke-width="2.4" marker-end="url(#arrG)"/>
+              <text x="277" y="92" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338CA">JSON</text>
+              <text x="277" y="232" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0F766E">list[int]</text>
+
+              <rect x="322" y="16" width="330" height="122" rx="14" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2"/>
+              <text x="487" y="42" text-anchor="middle" font-size="12.5" font-weight="700" fill="#4338CA">2A. LEAN 4 EXECUTABLE SPEC</text>
+              <text x="487" y="64" text-anchor="middle" font-size="12" font-weight="600" fill="#0F172A">tictactoe_oracle（ネイティブバイナリ）</text>
+              <text x="487" y="86" text-anchor="middle" font-size="11" fill="#475569">Proofs.lean で不変条件を数学的に証明済み</text>
+              <rect x="372" y="100" width="230" height="24" rx="12" fill="#FFFFFF" stroke="#4F46E5" stroke-width="1"/>
+              <text x="487" y="116" text-anchor="middle" font-size="11" font-weight="700" fill="#4338CA">expected = {"ok": false, "error": ...}</text>
+
+              <rect x="322" y="176" width="330" height="122" rx="14" fill="#F0FDFA" stroke="#0D9488" stroke-width="2"/>
+              <text x="487" y="202" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0F766E">2B. PYTHON 本番コード</text>
+              <text x="487" y="224" text-anchor="middle" font-size="12" font-weight="600" fill="#0F172A">tictactoe/game.py :: play_moves()</text>
+              <text x="487" y="246" text-anchor="middle" font-size="11" fill="#475569">通常の読みやすく保守しやすい Python 実装</text>
+              <rect x="372" y="260" width="230" height="24" rx="12" fill="#FFFFFF" stroke="#0D9488" stroke-width="1"/>
+              <text x="487" y="276" text-anchor="middle" font-size="11" font-weight="700" fill="#0F766E">actual = {"ok": false, "error": ...}</text>
+
+              <path d="M 652 78 L 748 134" fill="none" stroke="#4338CA" stroke-width="2.4" marker-end="url(#arrB)"/>
+              <path d="M 652 234 L 748 178" fill="none" stroke="#0D9488" stroke-width="2.4" marker-end="url(#arrG)"/>
+
+              <rect x="756" y="88" width="346" height="136" rx="14" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+              <rect x="756" y="88" width="346" height="32" rx="14" fill="#0F172A"/>
+              <rect x="756" y="106" width="346" height="14" fill="#0F172A"/>
+              <text x="929" y="109" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">3. 出力の突き合わせ (Differential Check)</text>
+              <text x="929" y="148" text-anchor="middle" font-size="15" font-weight="700" font-family="JetBrains Mono, monospace" fill="#4338CA">assert actual == expected</text>
+              <text x="929" y="176" text-anchor="middle" font-size="11.5" fill="#0F766E" font-weight="600">✓ 一致 → Python が証明済み仕様どおり動作</text>
+              <text x="929" y="198" text-anchor="middle" font-size="11.5" fill="#E11D48" font-weight="600">✗ 不一致 → 最小のバグ再現手順を自動報告</text>
+            </svg>
+          </div>
+
+          <div class="callout green">
+            <strong>産業界での実績:</strong> AWS の認可エンジン <strong>Cedar</strong>（Lean 4 仕様 + Rust 本番実装 + 夜間数千万回の Differential Testing）と同じ設計思想を、Python + <code class="inline">uv</code> + <code class="inline">Hypothesis</code> に適用した構成です。
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 9: WHY NOT BUILD THE WHOLE APP IN LEAN 4? -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">03b / アーキテクチャ判断</div>
+          <h2>疑問：Lean 4 でそのままアプリ全体を書けばいいのでは？</h2>
+          <p class="subtitle">技術的には可能（Lean 4 コンパイラ自身も Lean 4 製）ですが、実務では<strong>仕様と本番アプリを分離する</strong>方が合理的です。</p>
+
+          <div class="grid-2">
+            <div class="svg-box">
+              <svg viewBox="0 0 530 385" xmlns="http://www.w3.org/2000/svg">
+                <rect x="10" y="10" width="510" height="365" rx="14" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6"/>
+                <text x="265" y="36" text-anchor="middle" font-size="13" font-weight="700" fill="#0F172A">一般的な本番アプリケーションの内訳</text>
+
+                <!-- 80-90% App Shell -->
+                <rect x="28" y="52" width="474" height="128" rx="12" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.8"/>
+                <text x="46" y="76" font-size="11.5" font-weight="700" fill="#0F766E">80〜90% アプリ基盤・エコシステム層（Python / Go / Rust のまま）</text>
+                <g font-size="11" fill="#0F172A">
+                  <rect x="46" y="90" width="136" height="32" rx="6" fill="#FFFFFF" stroke="#0D9488"/>
+                  <text x="114" y="110" text-anchor="middle">Web / API (FastAPI)</text>
+                  <rect x="196" y="90" width="136" height="32" rx="6" fill="#FFFFFF" stroke="#0D9488"/>
+                  <text x="264" y="110" text-anchor="middle">Cloud SDK / DB</text>
+                  <rect x="346" y="90" width="138" height="32" rx="6" fill="#FFFFFF" stroke="#0D9488"/>
+                  <text x="415" y="110" text-anchor="middle">AI/ML (PyTorch等)</text>
+                </g>
+                <text x="265" y="156" text-anchor="middle" font-size="10.8" fill="#475569">形式証明の ROI が低い領域 — 豊富なライブラリと開発速度が重要</text>
+
+                <!-- 10-20% Critical Core -->
+                <rect x="28" y="196" width="474" height="162" rx="12" fill="#FFFFFF" stroke="#4F46E5" stroke-width="2"/>
+                <text x="46" y="220" font-size="11.5" font-weight="700" fill="#4338CA">10〜20% 重要なコアロジック（認可・課金・状態遷移など）</text>
+
+                <!-- Left: Optimized Prod -->
+                <rect x="46" y="236" width="202" height="104" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.6"/>
+                <text x="147" y="258" text-anchor="middle" font-size="11.5" font-weight="700" fill="#B45309">本番実装 (Python)</text>
+                <text x="147" y="278" text-anchor="middle" font-size="10.5" fill="#0F172A">性能・運用性を優先</text>
+                <text x="147" y="295" text-anchor="middle" font-size="10" fill="#475569">キャッシュ・バッチ化・</text>
+                <text x="147" y="311" text-anchor="middle" font-size="10" fill="#475569">NumPy 等の最適化</text>
+                <text x="147" y="330" text-anchor="middle" font-size="9.5" font-weight="700" fill="#BE123C">直接証明すると壊れやすい</text>
+
+                <!-- Bridge arrow -->
+                <text x="265" y="280" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338CA">Diff</text>
+                <text x="265" y="296" text-anchor="middle" font-size="13" font-weight="700" fill="#4338CA">↔</text>
+                <text x="265" y="311" text-anchor="middle" font-size="10" font-weight="700" fill="#4338CA">Test</text>
+
+                <!-- Right: Lean 4 Spec -->
+                <rect x="282" y="236" width="202" height="104" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.6"/>
+                <text x="383" y="258" text-anchor="middle" font-size="11.5" font-weight="700" fill="#4338CA">Executable Spec (Lean 4)</text>
+                <text x="383" y="278" text-anchor="middle" font-size="10.5" fill="#0F172A">明快さ・証明しやすさ優先</text>
+                <text x="383" y="295" text-anchor="middle" font-size="10" fill="#475569">素朴な再帰・不変データ構造</text>
+                <text x="383" y="311" text-anchor="middle" font-size="10" fill="#475569">シンプルな代数的データ型</text>
+                <text x="383" y="330" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0F766E">数学的証明が圧倒的に楽！</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:11px;">
+              <div class="card-white">
+                <h3><span class="pill pill-red">1. エコシステム差</span> 周辺ライブラリが不足</h3>
+                <p>Web フレームワーク、Cloud SDK、DB、AI/ML スタックは Python 等が圧倒的に充実。Lean 4 で車輪の再発明をするのは非効率。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">2. 証明しやすさ ≠ 速さ</span> 関心事の分離</h3>
+                <p>最適化された本番コードを直接証明するとリファクタのたびに証明が壊れます。明快な仕様と高速な実装を分けるのが定石（AWS Cedar も同様）。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-blue">3. 既存資産とチーム</span> 書き直し不要</h3>
+                <p>既存チームは普段どおり Python で開発を続けつつ、重要なコア仕様だけを少人数（または AI Agent）が Lean 4 で検証できます。</p>
+              </div>
+              <div class="callout green" style="margin-top: 2px;">
+                <strong>例外:</strong> 認可エンジンやパーサなど<strong>純粋計算だけの小さな超重要コア</strong>なら、Lean 4 を C 共有ライブラリ化して Python から FFI で直接本番利用する選択もアリです。
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 10: HOW DO WE VERIFY PYTHON <-> LEAN MAPPING? -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">03c / マッピングの保証</div>
+          <h2>Python と Lean 4 が正しく対応しているかどう確認する？</h2>
+          <p class="subtitle">Python と Lean 間に自動証明はありませんが、<strong>4 層の防御</strong>でマッピングの正しさと同期を継続的に担保します。</p>
+
+          <div class="grid-2">
+            <div class="svg-box">
+              <svg viewBox="0 0 530 385" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <marker id="arrM1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+                  </marker>
+                </defs>
+
+                <!-- Layer 1 -->
+                <rect x="14" y="10" width="502" height="68" rx="11" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.8"/>
+                <text x="32" y="34" font-size="12" font-weight="700" fill="#4338CA">第 1 層: 1 対 1 の境界スキーマ契約 (JSON Contract)</text>
+                <text x="32" y="55" font-size="11" fill="#0F172A">入力・出力・null・エラーコードを Python と Lean で厳密に統一</text>
+
+                <line x1="265" y1="78" x2="265" y2="96" stroke="#475569" stroke-width="2" marker-end="url(#arrM1)"/>
+
+                <!-- Layer 2 -->
+                <rect x="14" y="100" width="502" height="68" rx="11" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.8"/>
+                <text x="32" y="124" font-size="12" font-weight="700" fill="#B45309">第 2 層: 振る舞いの等価性 (Hypothesis Differential Testing)</text>
+                <text x="32" y="145" font-size="11" fill="#0F172A">正常系＋異常系の数千ケースで Python(x) == Lean(x) を検証</text>
+
+                <line x1="265" y1="168" x2="265" y2="186" stroke="#475569" stroke-width="2" marker-end="url(#arrM1)"/>
+
+                <!-- Layer 3 -->
+                <rect x="14" y="190" width="502" height="68" rx="11" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.8"/>
+                <text x="32" y="214" font-size="12" font-weight="700" fill="#0F766E">第 3 層: 分岐カバレッジ 100% + Mutation Testing (mutmut)</text>
+                <text x="32" y="235" font-size="11" fill="#0F172A">Python の全分岐を網羅し、意図的なバグ混入を 100% 検知できるか検査</text>
+
+                <line x1="265" y1="258" x2="265" y2="276" stroke="#475569" stroke-width="2" marker-end="url(#arrM1)"/>
+
+                <!-- Layer 4: Blind spot closure -->
+                <rect x="14" y="280" width="502" height="92" rx="11" fill="#0F172A"/>
+                <text x="32" y="305" font-size="12" font-weight="700" fill="#F28B82">唯一の盲点: Python と Lean の「両方」に同じ勘違いを書いたら？</text>
+                <text x="32" y="328" font-size="11" fill="#E2E8F0">両方が同じ誤った出力を返すため、Differential Testing だけでは見抜けない。</text>
+                <text x="32" y="352" font-size="11.2" font-weight="700" fill="#81C995">→ Lean 側の形式証明 (Proofs.lean の不変条件) が通らず食い止める！</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:11px;">
+              <div class="card-white">
+                <h3><span class="pill pill-blue">境界契約</span> 入出力を厳密に揃える</h3>
+                <p>内部実装が違っても（Python の <code class="inline">for</code> vs Lean の <code class="inline">foldlM</code>）、JSON 構造とエラーコードの一致でブラックボックス等価性を検証。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-green">穴の検査</span> カバレッジ &amp; Mutation Test</h3>
+                <p><code class="inline">pytest --cov</code> で Python 全分岐の到達を確認し、<code class="inline">mutmut</code> 等でコードをわざと壊して Lean Oracle が全部検知できるか測る。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">ドリフト防止</span> CI で片側変更をブロック</h3>
+                <p>Python だけ／Lean だけ変更すると CI の Differential Test が即座に赤くなり、仕様と実装の乖離を構造的に防げる。</p>
+              </div>
+              <div class="callout" style="margin-top: 2px;">
+                <strong>役割分担の完結:</strong> 「仕様の正しさ」＝ Lean の定理証明、「Python との対応」＝ Differential + カバレッジ / Mutation テスト。
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 11: PROJECT LAYOUT -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">04 / サンプル構成</div>
+          <h2>Tic-Tac-Toe サンプルの全体マップ</h2>
+          <p class="subtitle"><code class="inline">lean4-tictactoe-test/</code> 内の 6 つの小さなファイルが連携して動きます。</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>ディレクトリ構成</span>
+              </div>
+              <pre>lean4-tictactoe-test/
+├── pyproject.toml           <span class="cm"># uv + pytest + hypothesis</span>
+├── <span class="fn">tictactoe/</span>
+│   └── <span class="fn">game.py</span>              <span class="cm"># Step 1: 本番 Python 実装</span>
+├── <span class="kw">lean_spec/</span>
+│   ├── lean-toolchain       <span class="cm"># Lean v4.22.0 を固定</span>
+│   ├── lakefile.toml        <span class="cm"># ビルド &amp; testDriver 設定</span>
+│   ├── <span class="kw">TicTacToe/</span>
+│   │   ├── <span class="kw">Spec.lean</span>        <span class="cm"># Step 2: 実行可能な仕様</span>
+│   │   └── <span class="kw">Proofs.lean</span>      <span class="cm"># Step 3: 形式証明 + #guard</span>
+│   └── <span class="ty">Main.lean</span>            <span class="cm"># Step 4: JSON Lines Oracle</span>
+└── <span class="st">tests/</span>
+    ├── <span class="ty">conftest.py</span>          <span class="cm"># Step 5: 常駐 pytest fixture</span>
+    ├── test_unit.py         <span class="cm"># 通常の Unit Test</span>
+    └── <span class="st">test_differential.py</span> <span class="cm"># Step 6: Hypothesis テスト</span></pre>
+            </div>
+
+            <div class="svg-box">
+              <svg viewBox="0 0 500 385" xmlns="http://www.w3.org/2000/svg">
+                <rect x="20" y="8" width="460" height="50" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.6"/>
+                <text x="38" y="30" font-size="11" font-weight="700" fill="#0F766E">STEP 1</text>
+                <text x="95" y="30" font-size="13" font-weight="700" fill="#0F172A">tictactoe/game.py</text>
+                <text x="95" y="47" font-size="11" fill="#475569">JSON 互換 dict を返す純粋な Python 状態遷移ロジック</text>
+
+                <rect x="20" y="70" width="460" height="50" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.6"/>
+                <text x="38" y="92" font-size="11" font-weight="700" fill="#4338CA">STEP 2</text>
+                <text x="95" y="92" font-size="13" font-weight="700" fill="#0F172A">lean_spec/TicTacToe/Spec.lean</text>
+                <text x="95" y="109" font-size="11" fill="#475569">Lean 4 で記述した簡潔な参照モデル（Player, Board, applyMove）</text>
+
+                <rect x="20" y="132" width="460" height="50" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.6"/>
+                <text x="38" y="154" font-size="11" font-weight="700" fill="#4338CA">STEP 3</text>
+                <text x="95" y="154" font-size="13" font-weight="700" fill="#0F172A">lean_spec/TicTacToe/Proofs.lean</text>
+                <text x="95" y="171" font-size="11" fill="#475569">不変条件の形式証明 (theorem) ＋ コンパイル時 #guard テスト</text>
+
+                <rect x="20" y="194" width="460" height="50" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.6"/>
+                <text x="38" y="216" font-size="11" font-weight="700" fill="#B45309">STEP 4</text>
+                <text x="95" y="216" font-size="13" font-weight="700" fill="#0F172A">lean_spec/Main.lean</text>
+                <text x="95" y="233" font-size="11" fill="#475569">stdin/stdout で JSON Lines を処理する常駐ネイティブバイナリ</text>
+
+                <rect x="20" y="256" width="460" height="50" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.6"/>
+                <text x="38" y="278" font-size="11" font-weight="700" fill="#B45309">STEP 5</text>
+                <text x="95" y="278" font-size="13" font-weight="700" fill="#0F172A">tests/conftest.py</text>
+                <text x="95" y="295" font-size="11" fill="#475569">テストセッション中に 1 回だけ Oracle を起動する fixture</text>
+
+                <rect x="20" y="318" width="460" height="50" rx="10" fill="#FFF1F2" stroke="#E11D48" stroke-width="1.6"/>
+                <text x="38" y="340" font-size="11" font-weight="700" fill="#BE123C">STEP 6</text>
+                <text x="95" y="340" font-size="13" font-weight="700" fill="#0F172A">tests/test_differential.py</text>
+                <text x="95" y="357" font-size="11" fill="#475569">1000 パターン以上の入力で Python と Lean 4 の出力を突き合わせ</text>
+              </svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 7: STEP 1 - PYTHON PRODUCTION CODE -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow"><span class="pill pill-green">Step 1 / 6</span> 本番 Python 実装</div>
+          <h2>純粋なビジネスロジックを I/O から切り離す</h2>
+          <p class="subtitle"><code class="inline">tictactoe/game.py</code> に決定的な状態遷移関数をまとめ、JSON 互換の入出力契約を揃えます。</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>tictactoe/game.py</span>
+              </div>
+              <pre><span class="kw">def</span> <span class="fn">apply_move</span>(state: <span class="ty">GameState</span>, pos: <span class="ty">int</span>):
+    <span class="kw">if</span> state.status != <span class="st">"ongoing"</span>:
+        <span class="kw">return</span> <span class="kw">None</span>, <span class="st">"game_over"</span>
+    <span class="kw">if</span> pos &lt; <span class="num">0</span> <span class="kw">or</span> pos &gt;= <span class="num">9</span>:
+        <span class="kw">return</span> <span class="kw">None</span>, <span class="st">"out_of_bounds"</span>
+    <span class="kw">if</span> state.board[pos] <span class="kw">is not None</span>:
+        <span class="kw">return</span> <span class="kw">None</span>, <span class="st">"cell_occupied"</span>
+
+    new_board = _place(state.board, pos, state.turn)
+    <span class="kw">if</span> _has_won(new_board, state.turn):
+        <span class="kw">return</span> <span class="ty">GameState</span>(new_board, state.turn, <span class="st">"won"</span>, state.turn), <span class="kw">None</span>
+    <span class="kw">if</span> all(c <span class="kw">is not None</span> <span class="kw">for</span> c <span class="kw">in</span> new_board):
+        <span class="kw">return</span> <span class="ty">GameState</span>(new_board, state.turn, <span class="st">"draw"</span>, <span class="kw">None</span>), <span class="kw">None</span>
+    <span class="kw">return</span> <span class="ty">GameState</span>(new_board, _other(state.turn), <span class="st">"ongoing"</span>, <span class="kw">None</span>), <span class="kw">None</span>
+
+<span class="kw">def</span> <span class="fn">play_moves</span>(moves: <span class="ty">list</span>[<span class="ty">int</span>]) -&gt; <span class="ty">dict</span>:
+    state = initial_state()
+    <span class="kw">for</span> pos <span class="kw">in</span> moves:
+        state, err = apply_move(state, pos)
+        <span class="kw">if</span> err:
+            <span class="kw">return</span> {<span class="st">"ok"</span>: <span class="kw">False</span>, <span class="st">"error"</span>: err}
+    <span class="kw">return</span> state.to_dict()</pre>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="card-white">
+                <h3>設計のポイント: Functional Core</h3>
+                <ul class="clean green">
+                  <li><strong>不変な状態:</strong> <code class="inline">@dataclass(frozen=True)</code> + <code class="inline">tuple</code> で副作用によるバグを防止。</li>
+                  <li><strong>明示的なエラーコード:</strong> <code class="inline">"game_over"</code> / <code class="inline">"out_of_bounds"</code> / <code class="inline">"cell_occupied"</code> を Lean の <code class="inline">Except</code> と 1対1 対応させる。</li>
+                  <li><strong>リプレイ可能な入口:</strong> <code class="inline">play_moves(moves)</code> が整数リストを受け取るため、Fuzzing しやすい。</li>
+                </ul>
+              </div>
+              <div class="card">
+                <h3>共通 JSON インターフェース</h3>
+                <p><strong>正常系:</strong></p>
+                <p><code class="inline">{"ok": true, "board": ["X", ...], "turn": "O", "status": "ongoing", "winner": null}</code></p>
+                <p><strong>エラー系:</strong></p>
+                <p><code class="inline">{"ok": false, "error": "cell_occupied"}</code></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 8: STEP 2 - EXECUTABLE SPEC -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow"><span class="pill pill-blue">Step 2 / 6</span> Executable Specification</div>
+          <h2><code class="inline">Spec.lean</code> でルールを簡潔にモデル化する</h2>
+          <p class="subtitle">仕様書であると同時にそのまま実行できるコード（Single Source of Truth）を Lean 4 で書きます。</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>lean_spec/TicTacToe/Spec.lean</span>
+              </div>
+              <pre><span class="kw">inductive</span> <span class="ty">GameStatus</span> <span class="kw">where</span>
+  | ongoing | won (p : <span class="ty">Player</span>) | draw
+  <span class="kw">deriving</span> <span class="ty">BEq</span>, <span class="ty">DecidableEq</span>, <span class="ty">Repr</span>
+
+<span class="kw">def</span> <span class="fn">applyMove</span> (s : <span class="ty">GameState</span>) (pos : <span class="ty">Nat</span>)
+    : <span class="ty">Except</span> <span class="ty">String</span> <span class="ty">GameState</span> :=
+  <span class="kw">if</span> s.status != .ongoing <span class="kw">then</span>
+    .error <span class="st">"game_over"</span>
+  <span class="kw">else if</span> pos ≥ <span class="num">9</span> <span class="kw">then</span>
+    .error <span class="st">"out_of_bounds"</span>
+  <span class="kw">else if</span> cellAt s.board pos != none <span class="kw">then</span>
+    .error <span class="st">"cell_occupied"</span>
+  <span class="kw">else</span>
+    <span class="kw">let</span> board' := s.board.set pos (some s.turn)
+    <span class="kw">if</span> hasWon board' s.turn <span class="kw">then</span>
+      .ok { board := board', turn := s.turn, status := .won s.turn }
+    <span class="kw">else if</span> isFull board' <span class="kw">then</span>
+      .ok { board := board', turn := s.turn, status := .draw }
+    <span class="kw">else</span>
+      .ok { board := board', turn := s.turn.other, status := .ongoing }
+
+<span class="kw">def</span> <span class="fn">playMoves</span> (moves : <span class="ty">List</span> <span class="ty">Nat</span>) : <span class="ty">Except</span> <span class="ty">String</span> <span class="ty">GameState</span> :=
+  moves.foldlM applyMove initialState</pre>
+            </div>
+
+            <div class="svg-box">
+              <svg viewBox="0 0 480 370" xmlns="http://www.w3.org/2000/svg">
+                <text x="240" y="24" text-anchor="middle" font-size="13" font-weight="700" fill="#0F172A">型の対応関係: Python ↔ Lean 4</text>
+
+                <rect x="16" y="42" width="195" height="32" rx="8" fill="#F0FDFA"/>
+                <text x="113" y="63" text-anchor="middle" font-size="12" font-weight="700" fill="#0F766E">Python (game.py)</text>
+
+                <rect x="269" y="42" width="195" height="32" rx="8" fill="#EEF2FF"/>
+                <text x="366" y="63" text-anchor="middle" font-size="12" font-weight="700" fill="#4338CA">Lean 4 (Spec.lean)</text>
+
+                <g font-family="JetBrains Mono, monospace" font-size="11.5">
+                  <rect x="16" y="88" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="113" y="114" text-anchor="middle" fill="#0F172A">Literal["X", "O"]</text>
+                  <line x1="215" y1="110" x2="265" y2="110" stroke="#475569" stroke-width="1.8" stroke-dasharray="4,3"/>
+                  <rect x="269" y="88" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="366" y="114" text-anchor="middle" fill="#4338CA">inductive Player</text>
+
+                  <rect x="16" y="146" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="113" y="172" text-anchor="middle" fill="#0F172A">Player | None</text>
+                  <line x1="215" y1="168" x2="265" y2="168" stroke="#475569" stroke-width="1.8" stroke-dasharray="4,3"/>
+                  <rect x="269" y="146" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="366" y="172" text-anchor="middle" fill="#4338CA">Option Player</text>
+
+                  <rect x="16" y="204" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="113" y="230" text-anchor="middle" fill="#0F172A">(State | None, err)</text>
+                  <line x1="215" y1="226" x2="265" y2="226" stroke="#475569" stroke-width="1.8" stroke-dasharray="4,3"/>
+                  <rect x="269" y="204" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="366" y="230" text-anchor="middle" fill="#4338CA">Except String State</text>
+
+                  <rect x="16" y="262" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="113" y="288" text-anchor="middle" fill="#0F172A">for pos in moves:</text>
+                  <line x1="215" y1="284" x2="265" y2="284" stroke="#475569" stroke-width="1.8" stroke-dasharray="4,3"/>
+                  <rect x="269" y="262" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="366" y="288" text-anchor="middle" fill="#4338CA">moves.foldlM applyMove</text>
+                </g>
+
+                <rect x="16" y="322" width="448" height="36" rx="8" fill="#FFFBEB" stroke="#F59E0B"/>
+                <text x="240" y="344" text-anchor="middle" font-size="11.5" font-weight="600" fill="#0F172A">外部依存ゼロ（Mathlib 不要）→ 数秒でビルド完了！</text>
+              </svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 9: STEP 3 - FORMAL PROOFS & #guard -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow"><span class="pill pill-blue">Step 3 / 6</span> 形式証明 &amp; コンパイル時テスト</div>
+          <h2><code class="inline">Proofs.lean</code> で仕様の不変条件を証明する</h2>
+          <p class="subtitle">Oracle を信頼する根拠として、<code class="inline">lake test</code> 実行時に Lean kernel が重要な性質を数学的に検証します。</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>lean_spec/TicTacToe/Proofs.lean</span>
+              </div>
+              <pre><span class="cm">-- 1. 普遍的な定理（あり得るすべての盤面・手に対して成立）</span>
+<span class="kw">theorem</span> <span class="fn">applyMove_rejects_finished_game</span>
+    (s : <span class="ty">GameState</span>) (pos : <span class="ty">Nat</span>)
+    (hdone : s.status ≠ .ongoing) :
+    applyMove s pos = .error <span class="st">"game_over"</span> := <span class="kw">by</span>
+  <span class="kw">unfold</span> applyMove; <span class="kw">simp</span> [hdone]
+
+<span class="kw">theorem</span> <span class="fn">applyMove_rejects_out_of_bounds</span>
+    (s : <span class="ty">GameState</span>) (pos : <span class="ty">Nat</span>)
+    (hongoing : s.status = .ongoing) (hge : pos ≥ <span class="num">9</span>) :
+    applyMove s pos = .error <span class="st">"out_of_bounds"</span> := <span class="kw">by</span>
+  <span class="kw">unfold</span> applyMove; <span class="kw">simp</span> [hongoing, hge]
+
+<span class="kw">theorem</span> <span class="fn">applyMove_preserves_board_length</span> ... :
+    s'.board.length = s.board.length := ...
+
+<span class="cm">-- 2. コンパイル時の具体例チェック (#guard)</span>
+<span class="kw">#guard</span> playMoves [<span class="num">0</span>, <span class="num">0</span>] == .error <span class="st">"cell_occupied"</span>
+<span class="kw">#guard</span> playMoves [<span class="num">0</span>, <span class="num">3</span>, <span class="num">1</span>, <span class="num">4</span>, <span class="num">2</span>, <span class="num">5</span>] == .error <span class="st">"game_over"</span></pre>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="card-white">
+                <h3><span class="pill pill-blue">lakefile.toml</span> ネイティブ <code class="inline">lake test</code></h3>
+                <p><code class="inline">testDriver = "TicTacToe"</code> を設定すると、ライブラリの型チェック自体がテストになります。証明の破綻や <code class="inline">#guard</code> 失敗があれば <code class="inline">lake test</code> が即座に失敗します。</p>
+              </div>
+              <div class="card">
+                <h3>これらの証明が保証すること</h3>
+                <ul class="clean">
+                  <li><strong>安全性:</strong> 終了済みゲームではどんな手も<em>絶対に</em>受け付けない。</li>
+                  <li><strong>境界チェック:</strong> 9 以上の座標は<em>必ず</em> <code class="inline">"out_of_bounds"</code> で拒否。</li>
+                  <li><strong>構造不変性:</strong> どの有効な遷移を経ても盤面長（9）は絶対に壊れない。</li>
+                </ul>
+              </div>
+              <div class="callout yellow">
+                <strong>実践 Tips:</strong> 複雑な仕様では、証明に着手する前に <code class="inline">by plausible</code> で反例がないか先に確認すると手戻りを防げます。
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 10: STEP 4 & 5 - PERSISTENT JSON ORACLE -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow"><span class="pill pill-yellow">Steps 4 &amp; 5 / 6</span> 高速ブリッジ</div>
+          <h2>常駐 JSON Lines Oracle (<code class="inline">Main.lean</code> + <code class="inline">conftest.py</code>)</h2>
+          <p class="subtitle">テストごとにプロセス起動すると遅いため、常駐パイプ（stdin/stdout）で秒間数千ケースを処理します。</p>
+
+          <div class="svg-box" style="height: 225px; margin-bottom: 14px;">
+            <svg viewBox="0 0 1100 215" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <marker id="aB2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#4338CA"/>
+                </marker>
+                <marker id="aG2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#0D9488"/>
+                </marker>
+              </defs>
+
+              <rect x="40" y="10" width="260" height="42" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="2"/>
+              <text x="170" y="36" text-anchor="middle" font-size="13" font-weight="700" fill="#0F766E">pytest (conftest.py fixture)</text>
+              <line x1="170" y1="52" x2="170" y2="205" stroke="#0D9488" stroke-width="2" stroke-dasharray="5,4"/>
+
+              <rect x="800" y="10" width="260" height="42" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2"/>
+              <text x="930" y="36" text-anchor="middle" font-size="13" font-weight="700" fill="#4338CA">tictactoe_oracle (Main.lean)</text>
+              <line x1="930" y1="52" x2="930" y2="205" stroke="#4F46E5" stroke-width="2" stroke-dasharray="5,4"/>
+
+              <line x1="170" y1="78" x2="922" y2="78" stroke="#475569" stroke-width="2" marker-end="url(#aB2)"/>
+              <rect x="375" y="62" width="350" height="22" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+              <text x="550" y="77" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">1. pytest セッションで 1 回だけ起動 (Popen)</text>
+
+              <rect x="135" y="96" width="830" height="74" rx="10" fill="#FFFBEB" fill-opacity="0.45" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="6,4"/>
+              <text x="150" y="112" font-size="10.5" font-weight="700" fill="#B45309">1,000 回以上高速ループ (Hypothesis)</text>
+
+              <line x1="170" y1="128" x2="922" y2="128" stroke="#4338CA" stroke-width="2.2" marker-end="url(#aB2)"/>
+              <text x="550" y="122" text-anchor="middle" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#4338CA">stdin:  {"moves": [0, 3, 1, 4, 2]}\n  (flush)</text>
+
+              <line x1="930" y1="156" x2="178" y2="156" stroke="#0D9488" stroke-width="2.2" marker-end="url(#aG2)"/>
+              <text x="550" y="150" text-anchor="middle" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#0F766E">stdout: {"ok":true,"status":"won","winner":"X",...}\n  (flush)</text>
+
+              <line x1="170" y1="192" x2="922" y2="192" stroke="#475569" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#aB2)"/>
+              <text x="550" y="187" text-anchor="middle" font-size="11" fill="#475569">stdin を閉じる (EOF) → プロセスを安全に終了</text>
+            </svg>
+          </div>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>lean_spec/Main.lean（抜粋）</span>
+              </div>
+              <pre><span class="kw">partial def</span> <span class="fn">loop</span> (stdin stdout : <span class="ty">IO.FS.Stream</span>) : <span class="ty">IO</span> <span class="ty">Unit</span> := <span class="kw">do</span>
+  <span class="kw">let</span> line ← stdin.getLine
+  <span class="kw">if</span> line.isEmpty <span class="kw">then return</span> ()
+  <span class="kw">let</span> resp := <span class="kw">match</span> <span class="ty">Json</span>.parse line.trim &gt;&gt;= fromJson? <span class="kw">with</span>
+    | .ok (req : <span class="ty">PlayRequest</span>) => resultToJson (playMoves req.moves)
+    | .error err => ...
+  stdout.putStrLn resp.compress
+  stdout.flush   <span class="cm">-- 重要: パイプのデッドロックを防止</span>
+  loop stdin stdout</pre>
+            </div>
+
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>tests/conftest.py（抜粋）</span>
+              </div>
+              <pre><span class="kw">@pytest.fixture</span>(scope=<span class="st">"session"</span>)
+<span class="kw">def</span> <span class="fn">lean_oracle</span>():
+    <span class="kw">if not</span> ORACLE_BIN.exists():
+        pytest.skip(<span class="st">"Run: cd lean_spec &amp;&amp; lake build"</span>)
+    oracle = <span class="ty">LeanOracle</span>(ORACLE_BIN)
+    <span class="kw">try</span>:
+        <span class="kw">yield</span> oracle
+    <span class="kw">finally</span>:
+        oracle.close()</pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 11: STEP 6 - DIFFERENTIAL TESTING & BUG CATCH -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow"><span class="pill pill-red">Step 6 / 6</span> Differential Testing の威力</div>
+          <h2>Unit Test をすり抜けるバグを自動検知 (<code class="inline">test_differential.py</code>)</h2>
+          <p class="subtitle">Hypothesis が不正入力・全順列を網羅的に探索し、仕様とのズレを最小手順まで自動で shrinking します。</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>tests/test_differential.py</span>
+              </div>
+              <pre><span class="cm"># 戦略 1: 範囲外(9..11)・重複手・決着後の手を含むランダム列</span>
+<span class="kw">@settings</span>(max_examples=<span class="num">500</span>)
+<span class="kw">@given</span>(moves=st.lists(
+    st.integers(min_value=<span class="num">0</span>, max_value=<span class="num">11</span>),
+    max_size=<span class="num">12</span>,
+))
+<span class="kw">def</span> <span class="fn">test_random_move_sequences_match_lean_spec</span>(lean_oracle, moves):
+    <span class="kw">assert</span> play_moves(moves) == lean_oracle.play(moves)
+
+<span class="cm"># 戦略 2: 0..8 の順列で勝敗・引き分け・途中経過を全検証</span>
+<span class="kw">@settings</span>(max_examples=<span class="num">500</span>)
+<span class="kw">@given</span>(moves=st.permutations(list(range(<span class="num">9</span>))))
+<span class="kw">def</span> <span class="fn">test_full_game_permutations_match_lean_spec</span>(lean_oracle, moves):
+    <span class="kw">for</span> k <span class="kw">in</span> range(len(moves) + <span class="num">1</span>):
+        seq = moves[:k]
+        <span class="kw">assert</span> play_moves(seq) == lean_oracle.play(seq)</pre>
+            </div>
+
+            <div class="svg-box">
+              <svg viewBox="0 0 500 375" xmlns="http://www.w3.org/2000/svg">
+                <rect x="8" y="8" width="484" height="358" rx="14" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
+                <text x="250" y="36" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0F172A">実験: 斜めライン (2, 4, 6) を 1 行消してみると…</text>
+
+                <rect x="28" y="54" width="444" height="58" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+                <text x="46" y="77" font-size="11.5" font-weight="700" fill="#475569">1. tictactoe/game.py にバグを混入:</text>
+                <text x="46" y="98" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#E11D48">- (2, 4, 6),  # 斜め勝利条件をうっかり削除</text>
+
+                <rect x="28" y="126" width="444" height="54" rx="10" fill="#F0FDFA" stroke="#0D9488"/>
+                <text x="46" y="149" font-size="12" font-weight="700" fill="#0F766E">2. test_unit.py → 5 PASSED（バグを見逃す！）</text>
+                <text x="46" y="168" font-size="11" fill="#0F172A">Unit Test は横ライン (0, 1, 2) と引き分けしか見ていない。</text>
+
+                <rect x="28" y="194" width="444" height="154" rx="10" fill="#FFF1F2" stroke="#E11D48" stroke-width="1.8"/>
+                <text x="46" y="218" font-size="12" font-weight="700" fill="#BE123C">3. test_differential.py → 即座に FAILED &amp; 縮小！</text>
+                <text x="46" y="242" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#0F172A">Falsifying example: moves=[2, 0, 4, 1, 6]</text>
+                <text x="46" y="266" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#4338CA">Lean 4 Oracle: {"status": "won", "winner": "X"}</text>
+                <text x="46" y="288" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#BE123C">Python Actual: {"status": "ongoing", "winner": null}</text>
+                <rect x="46" y="304" width="408" height="30" rx="6" fill="#FFFFFF"/>
+                <text x="250" y="323" text-anchor="middle" font-size="11" font-weight="600" fill="#0F172A">Hypothesis が最短 5 手の再現手順まで自動で絞り込んで報告</text>
+              </svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 12: CI WORKFLOW & WHEN TO USE -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">05 / 実務導入ガイド</div>
+          <h2>CI パイプラインと適用すべき領域</h2>
+          <p class="subtitle">コードベース全体ではなく、「バグのコストが高い純粋ロジック層」にピンポイント適用するのがコツです。</p>
+
+          <div class="svg-box" style="height: 118px; margin-bottom: 14px;">
+            <svg viewBox="0 0 1100 108" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <marker id="arrCI" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+                </marker>
+              </defs>
+              <rect x="12" y="14" width="235" height="78" rx="12" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.8"/>
+              <text x="129" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#4338CA">1. lake test</text>
+              <text x="129" y="63" text-anchor="middle" font-size="11" fill="#0F172A">証明 &amp; #guard を検証</text>
+              <text x="129" y="79" text-anchor="middle" font-size="10" fill="#475569">(lean-toolchain で版固定)</text>
+
+              <line x1="247" y1="53" x2="290" y2="53" stroke="#475569" stroke-width="2" marker-end="url(#arrCI)"/>
+
+              <rect x="296" y="14" width="235" height="78" rx="12" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.8"/>
+              <text x="413" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#B45309">2. lake build</text>
+              <text x="413" y="63" text-anchor="middle" font-size="11" fill="#0F172A">ネイティブ Oracle をビルド</text>
+              <text x="413" y="79" text-anchor="middle" font-size="10" fill="#475569">(CI で .lake をキャッシュ)</text>
+
+              <line x1="531" y1="53" x2="574" y2="53" stroke="#475569" stroke-width="2" marker-end="url(#arrCI)"/>
+
+              <rect x="580" y="14" width="235" height="78" rx="12" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.8"/>
+              <text x="697" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#0F766E">3. uv run pytest</text>
+              <text x="697" y="63" text-anchor="middle" font-size="11" fill="#0F172A">Unit + Hypothesis Diff 実行</text>
+              <text x="697" y="79" text-anchor="middle" font-size="10" fill="#475569">(数千ケースの自動突き合わせ)</text>
+
+              <line x1="815" y1="53" x2="858" y2="53" stroke="#475569" stroke-width="2" marker-end="url(#arrCI)"/>
+
+              <rect x="864" y="14" width="224" height="78" rx="12" fill="#0F172A"/>
+              <text x="976" y="46" text-anchor="middle" font-size="13" font-weight="700" fill="#81C995">✓ 高信頼リリース</text>
+              <text x="976" y="68" text-anchor="middle" font-size="11" fill="#E2E8F0">仕様準拠を継続保証</text>
+            </svg>
+          </div>
+
+          <div class="grid-2">
+            <div class="card-white">
+              <h3><span class="pill pill-green">ROI が高い</span> Lean 4 + Python 向き</h3>
+              <ul class="clean green">
+                <li><strong>認可・アクセス制御</strong>（RBAC / ABAC / IAM ポリシー評価）</li>
+                <li><strong>課金・精算・在庫ロジック</strong>（割引、クォータ、残高整合性）</li>
+                <li><strong>ステートマシン・ワークフロー</strong>（注文・決済状態遷移）</li>
+                <li><strong>パーサ・シリアライザ・変換器</strong>（ラウンドトリップ・等価性）</li>
+              </ul>
+            </div>
+
+            <div class="card-white">
+              <h3><span class="pill pill-red">通常テストで十分</span> 対象外</h3>
+              <ul class="clean red">
+                <li><strong>I/O 中心のグルーコード</strong>（API ラッパ、DB クエリ）</li>
+                <li><strong>単純な CRUD・UI 表示</strong>（証明すべき不変条件が薄い）</li>
+                <li><strong>曖昧なヒューリスティック</strong>（厳密な正解 Oracle が定義不能）</li>
+              </ul>
+              <div class="callout" style="margin-top: auto;">
+                <strong>ローカル実行:</strong> <code class="inline">cd lean_spec &amp;&amp; lake test &amp;&amp; lake build &amp;&amp; cd .. &amp;&amp; uv run pytest -v</code>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 19: HYPOTHESIS VS PLAUSIBLE POSITIONING -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">06 / ツールの使い分け</div>
+          <h2>補足：Hypothesis と Plausible の役割分担</h2>
+          <p class="subtitle">どちらも QuickCheck 系の Property-Based Testing ですが、<strong>検証対象</strong>と<strong>使うフェーズ</strong>が異なります。</p>
+
+          <!-- Workflow SVG -->
+          <div class="svg-box" style="height: 150px; margin-bottom: 14px;">
+            <svg viewBox="0 0 1100 142" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <marker id="arrP1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+                </marker>
+              </defs>
+
+              <!-- Stage 1: Plausible -->
+              <rect x="12" y="14" width="320" height="114" rx="12" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2" stroke-dasharray="6,4"/>
+              <text x="172" y="38" text-anchor="middle" font-size="11" font-weight="700" fill="#4338CA">STAGE 1（オプション）: LEAN 4 側</text>
+              <text x="172" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="#0F172A">Plausible (by plausible)</text>
+              <text x="172" y="84" text-anchor="middle" font-size="11" fill="#475569">仕様や定理の仮説自体を事前チェック</text>
+              <text x="172" y="102" text-anchor="middle" font-size="10.5" fill="#4338CA" font-weight="600">証明に着手する前に反例を数秒で潰す</text>
+
+              <line x1="332" y1="71" x2="380" y2="71" stroke="#475569" stroke-width="2" marker-end="url(#arrP1)"/>
+
+              <!-- Stage 2: Proof -->
+              <rect x="386" y="14" width="290" height="114" rx="12" fill="#F0FDFA" stroke="#0D9488" stroke-width="2"/>
+              <text x="531" y="38" text-anchor="middle" font-size="11" font-weight="700" fill="#0F766E">STAGE 2: LEAN 4 KERNEL</text>
+              <text x="531" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="#0F172A">形式証明 (lake test)</text>
+              <text x="531" y="84" text-anchor="middle" font-size="11" fill="#475569">不変条件を全入力 (∀) に対して証明</text>
+              <text x="531" y="102" text-anchor="middle" font-size="10.5" fill="#0F766E" font-weight="600">信頼できるネイティブ Oracle を生成</text>
+
+              <line x1="676" y1="71" x2="724" y2="71" stroke="#475569" stroke-width="2" marker-end="url(#arrP1)"/>
+
+              <!-- Stage 3: Hypothesis -->
+              <rect x="730" y="14" width="358" height="114" rx="12" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2.4"/>
+              <text x="909" y="38" text-anchor="middle" font-size="11" font-weight="700" fill="#B45309">STAGE 3（主役）: PYTHON CI</text>
+              <text x="909" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="#0F172A">Hypothesis (uv run pytest)</text>
+              <text x="909" y="84" text-anchor="middle" font-size="11" fill="#475569">Differential Testing: Python ↔ Lean 4</text>
+              <text x="909" y="102" text-anchor="middle" font-size="10.5" fill="#B45309" font-weight="600">PR ごとに本番 Python コードを守る</text>
+            </svg>
+          </div>
+
+          <div class="grid-2">
+            <div class="card-white">
+              <h3><span class="pill pill-yellow">サンプルの主役</span> Hypothesis（Python 側）</h3>
+              <ul class="clean yellow">
+                <li><strong>対象:</strong> <strong>Python 本番実装</strong>が Lean 4 Oracle と一致しているかを検証。</li>
+                <li><strong>実行タイミング:</strong> 毎回のローカルテスト・CI（<code class="inline">uv run pytest</code>）。</li>
+                <li><strong>役割:</strong> 本サンプルにおける Differential Testing の中核エンジン。</li>
+              </ul>
+            </div>
+
+            <div class="card-white">
+              <h3><span class="pill pill-blue">任意の拡張</span> Plausible（Lean 4 側）</h3>
+              <ul class="clean">
+                <li><strong>対象:</strong> <strong>Lean 4 の仕様や定理の仮説自体</strong>にミスがないかを証明前に反例探索。</li>
+                <li><strong>今回未導入の理由:</strong> Tic-Tac-Toe 最小サンプルでは<strong>外部依存ゼロ</strong>を優先して意図的に省略。</li>
+                <li><strong>導入の目安:</strong> 課金・認可など仕様が複雑になってきた段階で Lake に追加する。</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 20: SUMMARY & CTA LINKS -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">07 / まとめ &amp; Next Steps</div>
+          <h2>まとめ・次に試すためのリソース</h2>
+          <p class="subtitle">既存アプリを書き直さずに、Python コードベースへ数学的な品質保証を取り入れましょう。</p>
+
+          <div class="grid-2">
+            <div style="display:flex; flex-direction:column; gap:11px;">
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">1</span> 探索は Hypothesis、正解は Lean 4</h3>
+                <p>Hypothesis がエッジケース探索と自動 shrinking を担い、Lean 4 が<strong>Test Oracle 問題</strong>を根本解決します。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-blue">2</span> Proof Kernel × Native Compiler</h3>
+                <p><code class="inline">lake test</code> で不変条件を数学的に検証し、<code class="inline">lake build</code> でマイクロ秒動作の高速 Oracle を生成できます。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-green">3</span> マッピングの信頼性を 4 層で担保</h3>
+                <p>JSON 契約の固定・Differential Testing・分岐カバレッジ 100% / Mutation Test・CI 強制でドリフトを防ぎます。</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-red">4</span> 重要な 10〜20% から小さく始める</h3>
+                <p>認可・課金・状態遷移など純粋ロジック層に絞り、残りの I/O 層は通常の <code class="inline">pytest</code> に任せるのが最短ルートです。</p>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div class="card" style="background: #F8FAFC;">
+                <h3>参考リンク (CTA)</h3>
+                <ul class="clean">
+                  <li>
+                    <strong>Lean 4 公式ドキュメント・言語リファレンス</strong><br/>
+                    <a href="https://lean-lang.org/documentation/" target="_blank" rel="noopener" style="color: var(--g-blue-dark); text-decoration: none; font-weight: 500;">https://lean-lang.org/documentation/ ↗</a>
+                  </li>
+                  <li>
+                    <strong>Hypothesis — Python 向け Property-Based Testing</strong><br/>
+                    <a href="https://hypothesis.readthedocs.io/" target="_blank" rel="noopener" style="color: var(--g-blue-dark); text-decoration: none; font-weight: 500;">https://hypothesis.readthedocs.io/ ↗</a>
+                  </li>
+                  <li>
+                    <strong>AWS Cedar Lean 4 形式仕様（実務リファレンス実装）</strong><br/>
+                    <a href="https://github.com/cedar-policy/cedar-spec" target="_blank" rel="noopener" style="color: var(--g-blue-dark); text-decoration: none; font-weight: 500;">https://github.com/cedar-policy/cedar-spec ↗</a>
+                  </li>
+                  <li>
+                    <strong>Plausible — Lean 4 内の Property-Based Testing</strong><br/>
+                    <a href="https://github.com/leanprover-community/plausible" target="_blank" rel="noopener" style="color: var(--g-blue-dark); text-decoration: none; font-weight: 500;">https://github.com/leanprover-community/plausible ↗</a>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="code-box" style="margin-top: auto;">
+                <div class="code-header">
+                  <div class="code-dots"><span></span><span></span><span></span></div>
+                  <span>Tic-Tac-Toe サンプルを今すぐ実行</span>
+                </div>
+                <pre><span class="cm"># 1. 証明チェック &amp; Lean 4 Oracle のビルド</span>
+cd lean_spec &amp;&amp; lake test &amp;&amp; lake build
+
+<span class="cm"># 2. Python Unit + Hypothesis Differential Test 実行</span>
+cd .. &amp;&amp; uv sync &amp;&amp; uv run pytest -v</pre>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Footer Navigation -->
+      <footer class="footer">
+        <div class="footer-brand">
+          <span style="width:8px; height:8px; border-radius:50%; background:linear-gradient(135deg,#4F46E5,#0D9488); display:inline-block;"></span>
+          <span>Lean 4 + Python Differential Testing 解説 · <a href="https://x.com/kazunori_279" target="_blank" rel="noopener" style="color:var(--ink-2); text-decoration:none;">@kazunori_279</a></span>
+        </div>
+
+        <div class="nav-controls">
+          <a class="lang-btn" id="langSwitch" href="slides.html">English</a>
+          <button class="nav-btn" id="prevBtn" aria-label="前のスライド">← 前へ</button>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <span class="slide-num" id="slideNum">1 / 20</span>
+          <button class="nav-btn" id="nextBtn" aria-label="次のスライド">次へ →</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const slides = Array.from(document.querySelectorAll('.slide'));
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const progressFill = document.getElementById('progressFill');
+      const slideNum = document.getElementById('slideNum');
+      const langSwitch = document.getElementById('langSwitch');
+      let current = 0;
+
+      function render(index) {
+        current = Math.max(0, Math.min(slides.length - 1, index));
+        slides.forEach((el, i) => {
+          el.classList.toggle('active', i === current);
+          el.classList.toggle('prev', i < current);
+        });
+        prevBtn.disabled = current === 0;
+        nextBtn.disabled = current === slides.length - 1;
+        slideNum.textContent = `${current + 1} / ${slides.length}`;
+        progressFill.style.width = `${((current + 1) / slides.length) * 100}%`;
+        history.replaceState(null, '', `#${current + 1}`);
+        langSwitch.href = `slides.html#${current + 1}`;
+      }
+
+      prevBtn.addEventListener('click', () => render(current - 1));
+      nextBtn.addEventListener('click', () => render(current + 1));
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+          e.preventDefault();
+          render(current + 1);
+        } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+          e.preventDefault();
+          render(current - 1);
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          render(0);
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          render(slides.length - 1);
+        }
+      });
+
+      const deck = document.querySelector('.deck');
+      function fitDeck() {
+        const pad = 28;
+        const scale = Math.min(
+          (window.innerWidth - pad) / 1280,
+          (window.innerHeight - pad) / 720,
+          1.25
+        );
+        deck.style.transform = `scale(${Math.max(0.25, scale)})`;
+      }
+      window.addEventListener('resize', fitDeck);
+      fitDeck();
+
+      const hashIdx = parseInt(location.hash.replace('#', ''), 10);
+      render(Number.isFinite(hashIdx) && hashIdx >= 1 ? hashIdx - 1 : 0);
+    })();
+  </script>
+</body>
+</html>

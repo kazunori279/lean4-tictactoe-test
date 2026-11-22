@@ -1,0 +1,7 @@
+.venv/
+.pytest_cache/
+.hypothesis/
+__pycache__/
+*.pyc
+lean_spec/.lake/
+.DS_Store

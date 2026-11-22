@@ -1,0 +1,1969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lean 4 + Python Differential Testing — Technical Walkthrough</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --g-blue: #4F46E5;
+      --g-blue-dark: #4338CA;
+      --g-blue-bg: #EEF2FF;
+      --g-red: #E11D48;
+      --g-red-bg: #FFF1F2;
+      --g-yellow: #F59E0B;
+      --g-yellow-dark: #B45309;
+      --g-yellow-bg: #FFFBEB;
+      --g-green: #0D9488;
+      --g-green-dark: #0F766E;
+      --g-green-bg: #F0FDFA;
+      --ink-1: #0F172A;
+      --ink-2: #475569;
+      --ink-3: #64748B;
+      --surface: #FFFFFF;
+      --surface-alt: #F8FAFC;
+      --border: #E2E8F0;
+      --code-bg: #0F172A;
+      --code-fg: #E2E8F0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      background: #E2E8F0;
+      color: var(--ink-1);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Deck container centered 16:9 */
+    .viewport {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+
+    .deck {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      flex-shrink: 0;
+      transform-origin: center center;
+      background: var(--surface);
+      border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(32, 33, 36, 0.14), 0 2px 8px rgba(32, 33, 36, 0.06);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top accent gradient stripe */
+    .top-stripe {
+      height: 5px;
+      width: 100%;
+      background: linear-gradient(90deg, #4F46E5 0%, #0EA5E9 55%, #0D9488 100%);
+      flex-shrink: 0;
+    }
+
+    /* Slides */
+    .slides {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 36px 48px 28px;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(28px);
+      transition: opacity 0.28s ease, transform 0.28s ease;
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
+
+    .slide.prev {
+      transform: translateX(-28px);
+    }
+
+    /* Header typography */
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--g-blue-dark);
+      margin-bottom: 8px;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .pill-blue { background: var(--g-blue-bg); color: var(--g-blue-dark); }
+    .pill-green { background: var(--g-green-bg); color: var(--g-green-dark); }
+    .pill-yellow { background: var(--g-yellow-bg); color: var(--g-yellow-dark); }
+    .pill-red { background: var(--g-red-bg); color: var(--g-red); }
+
+    h1 {
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      color: var(--ink-1);
+    }
+
+    h2 {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.22;
+      letter-spacing: -0.015em;
+      color: var(--ink-1);
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--ink-2);
+      line-height: 1.5;
+      margin-bottom: 18px;
+    }
+
+    /* Grids & Cards */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      flex: 1;
+      min-height: 0;
+      align-items: stretch;
+    }
+
+    .grid-2-wide {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 24px;
+      flex: 1;
+      min-height: 0;
+      align-items: stretch;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .card {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card-white {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 1px 3px rgba(60, 64, 67, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--ink-1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card p, .card li, .card-white p, .card-white li {
+      font-size: 13.5px;
+      line-height: 1.5;
+      color: var(--ink-2);
+    }
+
+    ul.clean {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    ul.clean li {
+      position: relative;
+      padding-left: 18px;
+    }
+
+    ul.clean li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 7px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--g-blue);
+    }
+
+    ul.clean.green li::before { background: var(--g-green); }
+    ul.clean.red li::before { background: var(--g-red); }
+    ul.clean.yellow li::before { background: var(--g-yellow-dark); }
+
+    /* Code blocks */
+    .code-box {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #30363D;
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+
+    .code-header {
+      background: #282C34;
+      padding: 7px 14px;
+      font-size: 11.5px;
+      color: #9AA0A6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #353B45;
+    }
+
+    .code-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .code-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .code-dots span:nth-child(1) { background: var(--g-red); }
+    .code-dots span:nth-child(2) { background: var(--g-yellow); }
+    .code-dots span:nth-child(3) { background: var(--g-green); }
+
+    pre {
+      padding: 13px 16px;
+      font-size: 12px;
+      line-height: 1.52;
+      overflow-x: auto;
+      margin: 0;
+      white-space: pre;
+    }
+
+    .kw { color: #8AB4F8; font-weight: 500; }
+    .ty { color: #FDD663; }
+    .fn { color: #81C995; }
+    .st { color: #F28B82; }
+    .cm { color: #9AA0A6; font-style: italic; }
+    .num { color: #C58AF9; }
+
+    code.inline {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      background: #F1F5F9;
+      color: var(--g-blue-dark);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    /* SVG wrapper */
+    .svg-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+    }
+    .svg-box svg {
+      max-width: 100%;
+      max-height: 100%;
+      height: auto;
+    }
+
+    /* Callout bar */
+    .callout {
+      display: block;
+      padding: 11px 16px;
+      border-radius: 10px;
+      background: var(--g-blue-bg);
+      border-left: 4px solid var(--g-blue-dark);
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--ink-1);
+      margin-top: 12px;
+    }
+    .callout.green { background: var(--g-green-bg); border-left-color: var(--g-green); }
+    .callout.yellow { background: var(--g-yellow-bg); border-left-color: var(--g-yellow-dark); }
+
+    /* Title slide special layout */
+    .title-slide {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 32px;
+      align-items: center;
+      height: 100%;
+    }
+    .title-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+
+    /* Table */
+    table.gc-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    table.gc-table th {
+      text-align: left;
+      padding: 10px 12px;
+      background: var(--surface-alt);
+      border-bottom: 2px solid var(--border);
+      color: var(--ink-1);
+      font-weight: 700;
+    }
+    table.gc-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--ink-2);
+      vertical-align: top;
+    }
+
+    /* Footer controls */
+    .footer {
+      height: 46px;
+      padding: 0 28px;
+      border-top: 1px solid var(--border);
+      background: var(--surface-alt);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      font-size: 12px;
+      color: var(--ink-2);
+    }
+
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+
+    .dot-group {
+      display: inline-flex;
+      gap: 4px;
+    }
+    .dot-group i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: block;
+    }
+
+    .nav-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .nav-btn, .lang-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--ink-1);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      font-family: inherit;
+      text-decoration: none;
+    }
+    .nav-btn:hover:not(:disabled), .lang-btn:hover {
+      background: var(--g-blue-bg);
+      border-color: var(--g-blue);
+      color: var(--g-blue-dark);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .progress-track {
+      width: 140px;
+      height: 5px;
+      background: #E0E3E7;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--g-blue-dark);
+      transition: width 0.25s ease;
+    }
+
+    .slide-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      min-width: 48px;
+      text-align: right;
+      color: var(--ink-2);
+    }
+  </style>
+</head>
+<body>
+  <div class="viewport">
+    <div class="deck">
+      <div class="top-stripe"></div>
+
+      <div class="slides" id="slides">
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 1: TITLE -->
+        <!-- ============================================================ -->
+        <section class="slide active">
+          <div class="title-slide">
+            <div>
+              <div class="eyebrow">
+                <span class="pill pill-blue">Formal Verification &amp; Software Testing</span>
+              </div>
+              <h1>Lean 4 + Python<br/>Differential Testing</h1>
+              <p class="subtitle" style="margin-top: 16px; font-size: 16px;">
+                A practical walkthrough of using <strong>Lean 4 executable specifications</strong>
+                and <strong>formal proofs</strong> as a mathematically verified test oracle for
+                <strong>Python</strong> applications — demonstrated step by step with Tic-Tac-Toe.
+              </p>
+              <div class="title-meta">
+                <span class="pill pill-blue">Lean 4.22+</span>
+                <span class="pill pill-green">Python 3.12 + uv</span>
+                <span class="pill pill-yellow">pytest + Hypothesis</span>
+                <span class="pill pill-red">JSON Lines Oracle</span>
+              </div>
+              <div style="margin-top: 18px; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); font-weight: 500;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                <a href="https://x.com/kazunori_279" target="_blank" rel="noopener" style="color: var(--ink-1); text-decoration: none; font-weight: 600;">@kazunori_279</a>
+              </div>
+              <div class="callout" style="margin-top: 18px;">
+                <strong>Key Idea:</strong> Prove invariants on a clean Lean 4 model, then fuzz-test your production Python code against it automatically.
+              </div>
+            </div>
+
+            <div class="svg-box">
+              <svg viewBox="0 0 460 400" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <filter id="sh1" x="-10%" y="-10%" width="120%" height="120%">
+                    <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#0F172A" flood-opacity="0.08"/>
+                  </filter>
+                  <marker id="arrBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#4338CA"/>
+                  </marker>
+                  <marker id="arrGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#0D9488"/>
+                  </marker>
+                </defs>
+
+                <!-- Background soft circle -->
+                <circle cx="230" cy="200" r="170" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+
+                <!-- Top Card: Lean 4 -->
+                <rect x="35" y="28" width="180" height="118" rx="14" fill="#FFFFFF" stroke="#4F46E5" stroke-width="2" filter="url(#sh1)"/>
+                <rect x="35" y="28" width="180" height="30" rx="14" fill="#EEF2FF"/>
+                <rect x="35" y="44" width="180" height="14" fill="#EEF2FF"/>
+                <text x="125" y="48" text-anchor="middle" font-size="12" font-weight="700" fill="#4338CA">LEAN 4 SPEC &amp; PROOFS</text>
+                <text x="125" y="80" text-anchor="middle" font-size="12" fill="#0F172A" font-weight="600">Executable Model</text>
+                <text x="125" y="100" text-anchor="middle" font-size="11" fill="#475569">Kernel-Checked Theorems</text>
+                <rect x="65" y="114" width="120" height="20" rx="10" fill="#F0FDFA"/>
+                <text x="125" y="128" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0F766E">✓ Ground Truth Oracle</text>
+
+                <!-- Top Right Card: Python -->
+                <rect x="245" y="28" width="180" height="118" rx="14" fill="#FFFFFF" stroke="#0D9488" stroke-width="2" filter="url(#sh1)"/>
+                <rect x="245" y="28" width="180" height="30" rx="14" fill="#F0FDFA"/>
+                <rect x="245" y="44" width="180" height="14" fill="#F0FDFA"/>
+                <text x="335" y="48" text-anchor="middle" font-size="12" font-weight="700" fill="#0F766E">PYTHON PRODUCTION</text>
+                <text x="335" y="80" text-anchor="middle" font-size="12" fill="#0F172A" font-weight="600">tictactoe/game.py</text>
+                <text x="335" y="100" text-anchor="middle" font-size="11" fill="#475569">Fast, Idiomatic Python</text>
+                <rect x="275" y="114" width="120" height="20" rx="10" fill="#FFFBEB"/>
+                <text x="335" y="128" text-anchor="middle" font-size="10.5" font-weight="700" fill="#B45309">System Under Test</text>
+
+                <!-- Center: Tic-Tac-Toe Board + Hypothesis -->
+                <rect x="135" y="218" width="190" height="148" rx="14" fill="#FFFFFF" stroke="#F59E0B" stroke-width="2" filter="url(#sh1)"/>
+                <text x="230" y="242" text-anchor="middle" font-size="12" font-weight="700" fill="#B45309">DIFFERENTIAL TESTING</text>
+                <text x="230" y="258" text-anchor="middle" font-size="11" fill="#475569">pytest + Hypothesis (1000s of games)</text>
+
+                <!-- Mini Tic-Tac-Toe Grid -->
+                <g transform="translate(185, 272)">
+                  <line x1="30" y1="0" x2="30" y2="82" stroke="#CBD5E1" stroke-width="2.5"/>
+                  <line x1="60" y1="0" x2="60" y2="82" stroke="#CBD5E1" stroke-width="2.5"/>
+                  <line x1="0" y1="27" x2="90" y2="27" stroke="#CBD5E1" stroke-width="2.5"/>
+                  <line x1="0" y1="55" x2="90" y2="55" stroke="#CBD5E1" stroke-width="2.5"/>
+                  <!-- X row win -->
+                  <text x="15" y="20" text-anchor="middle" font-size="16" font-weight="700" fill="#4F46E5">X</text>
+                  <text x="45" y="20" text-anchor="middle" font-size="16" font-weight="700" fill="#4F46E5">X</text>
+                  <text x="75" y="20" text-anchor="middle" font-size="16" font-weight="700" fill="#4F46E5">X</text>
+                  <line x1="6" y1="14" x2="84" y2="14" stroke="#4F46E5" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+                  <!-- O cells -->
+                  <text x="15" y="47" text-anchor="middle" font-size="16" font-weight="700" fill="#E11D48">O</text>
+                  <text x="45" y="47" text-anchor="middle" font-size="16" font-weight="700" fill="#E11D48">O</text>
+                </g>
+
+                <!-- Arrows connecting -->
+                <path d="M 125 148 L 125 182 L 195 182 L 195 212" fill="none" stroke="#4338CA" stroke-width="2.2" marker-end="url(#arrBlue)"/>
+                <path d="M 335 148 L 335 182 L 265 182 L 265 212" fill="none" stroke="#0D9488" stroke-width="2.2" marker-end="url(#arrGreen)"/>
+
+                <!-- Equality badge -->
+                <circle cx="230" cy="182" r="16" fill="#0F172A"/>
+                <text x="230" y="187" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">==</text>
+              </svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 2: WHY TRADITIONAL TESTING ISN'T ENOUGH (BEFORE) -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">01 / Motivation</div>
+          <h2>The Assurance Gap in Traditional Software Testing</h2>
+          <p class="subtitle">Traditional unit tests check only the edge cases you remember to write. Property-based testing goes further — but still hits a ceiling.</p>
+
+          <div class="grid-2-wide">
+            <div class="svg-box">
+              <svg viewBox="0 0 600 390" xmlns="http://www.w3.org/2000/svg">
+                <!-- Axes -->
+                <line x1="55" y1="340" x2="570" y2="340" stroke="#475569" stroke-width="2"/>
+                <line x1="55" y1="340" x2="55" y2="28" stroke="#475569" stroke-width="2"/>
+                <text x="310" y="374" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">STATE SPACE COVERAGE &amp; CONFIDENCE →</text>
+                <text x="22" y="185" text-anchor="middle" font-size="12" font-weight="700" fill="#475569" transform="rotate(-90 22 185)">MATHEMATICAL RIGOR →</text>
+
+                <!-- Level 1: Unit Tests -->
+                <rect x="85" y="255" width="145" height="68" rx="10" fill="#FFF1F2" stroke="#E11D48" stroke-width="1.8"/>
+                <text x="157" y="280" text-anchor="middle" font-size="13" font-weight="700" fill="#BE123C">Unit Tests</text>
+                <text x="157" y="298" text-anchor="middle" font-size="11" fill="#475569">pytest examples</text>
+                <text x="157" y="313" text-anchor="middle" font-size="10.5" fill="#475569">Checks known inputs</text>
+
+                <!-- Level 2: PBT -->
+                <rect x="215" y="165" width="175" height="72" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+                <text x="302" y="191" text-anchor="middle" font-size="13" font-weight="700" fill="#B45309">Property-Based Testing</text>
+                <text x="302" y="209" text-anchor="middle" font-size="11" fill="#475569">Hypothesis</text>
+                <text x="302" y="224" text-anchor="middle" font-size="10.5" fill="#475569">1000s of random inputs + shrinking</text>
+
+                <!-- Level 3: Unfilled Gap -->
+                <rect x="355" y="55" width="205" height="82" rx="10" fill="#F8FAFC" stroke="#BDC1C6" stroke-width="2" stroke-dasharray="6,4"/>
+                <text x="457" y="88" text-anchor="middle" font-size="13" font-weight="700" fill="#64748B">? Assurance Gap</text>
+                <text x="457" y="108" text-anchor="middle" font-size="11" fill="#64748B">No universal proof (∀ inputs)</text>
+                <text x="457" y="124" text-anchor="middle" font-size="10.5" fill="#64748B">No trusted test oracle</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="card-white">
+                <h3><span class="pill pill-red">Limit 1</span> Unit Tests Miss Edge Cases</h3>
+                <p>Example-based tests only verify scenarios you explicitly imagined. Subtle combinations and boundary bugs slip straight through.</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">Next Step</span> Property-Based Testing</h3>
+                <p>Tools like <strong>Hypothesis</strong> automatically generate thousands of inputs — let's look at how it works and where it still hits the <strong>Test Oracle Problem</strong>.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 3: INTRODUCTION TO HYPOTHESIS -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">01b / Property-Based Testing</div>
+          <h2>Meet Hypothesis: Property-Based Testing in Python</h2>
+          <p class="subtitle">Instead of hand-writing fixed examples, declare input <strong>strategies</strong> and let Hypothesis hunt for edge cases automatically.</p>
+
+          <div class="grid-2">
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div class="svg-box" style="height: 205px;">
+                <svg viewBox="0 0 540 205" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <marker id="arrH1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+                    </marker>
+                    <marker id="arrHR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                      <path d="M 0 1 L 10 5 L 0 9 z" fill="#E11D48"/>
+                    </marker>
+                  </defs>
+
+                  <rect x="8" y="16" width="150" height="72" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.8"/>
+                  <text x="83" y="42" text-anchor="middle" font-size="12" font-weight="700" fill="#B45309">1. Strategy</text>
+                  <text x="83" y="60" text-anchor="middle" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#0F172A">st.lists(0..11)</text>
+                  <text x="83" y="76" text-anchor="middle" font-size="10" fill="#475569">Defines input shape</text>
+
+                  <line x1="158" y1="52" x2="190" y2="52" stroke="#475569" stroke-width="2" marker-end="url(#arrH1)"/>
+
+                  <rect x="195" y="16" width="150" height="72" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.8"/>
+                  <text x="270" y="42" text-anchor="middle" font-size="12" font-weight="700" fill="#4338CA">2. Generate</text>
+                  <text x="270" y="60" text-anchor="middle" font-size="10.5" fill="#0F172A">100s–1000s of inputs</text>
+                  <text x="270" y="76" text-anchor="middle" font-size="10" fill="#475569">Empty, dupes, bounds</text>
+
+                  <line x1="345" y1="52" x2="377" y2="52" stroke="#475569" stroke-width="2" marker-end="url(#arrH1)"/>
+
+                  <rect x="382" y="16" width="150" height="72" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.8"/>
+                  <text x="457" y="42" text-anchor="middle" font-size="12" font-weight="700" fill="#0F766E">3. Assert Property</text>
+                  <text x="457" y="60" text-anchor="middle" font-size="10.5" fill="#0F172A">Run Python function</text>
+                  <text x="457" y="76" text-anchor="middle" font-size="10" fill="#475569">Check invariant / oracle</text>
+
+                  <!-- Shrink arrow -->
+                  <path d="M 457 88 L 457 116 L 270 116 L 270 124" fill="none" stroke="#E11D48" stroke-width="2" marker-end="url(#arrHR)"/>
+                  <text x="382" y="110" text-anchor="middle" font-size="10.5" font-weight="700" fill="#BE123C">On Failure → Auto-Shrink</text>
+
+                  <rect x="32" y="128" width="476" height="64" rx="10" fill="#FFF1F2" stroke="#E11D48" stroke-width="1.6"/>
+                  <text x="270" y="150" text-anchor="middle" font-size="11.5" font-weight="700" fill="#BE123C">4. Minimal Counterexample (Saved to .hypothesis DB)</text>
+                  <text x="270" y="172" text-anchor="middle" font-size="11" font-family="JetBrains Mono, monospace" fill="#0F172A">[11, 2, 0, 7, 4, 1, 6, 8]  ──shrink──▶  [2, 0, 4, 1, 6]</text>
+                </svg>
+              </div>
+
+              <div class="code-box">
+                <div class="code-header">
+                  <div class="code-dots"><span></span><span></span><span></span></div>
+                  <span>Hypothesis Quick Example</span>
+                </div>
+                <pre><span class="kw">from</span> hypothesis <span class="kw">import</span> given, strategies <span class="kw">as</span> st
+
+<span class="kw">@given</span>(xs=st.lists(st.integers()))
+<span class="kw">def</span> <span class="fn">test_sort_idempotent</span>(xs):
+    <span class="kw">assert</span> sorted(sorted(xs)) == sorted(xs)</pre>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div class="card-white">
+                <h3><span class="pill pill-green">Benefits</span> Why Developers Love Hypothesis</h3>
+                <ul class="clean green">
+                  <li><strong>Finds blind-spot edge cases:</strong> Automatically tries empty lists, duplicates, negative/huge numbers, and rare combinations.</li>
+                  <li><strong>Automatic Shrinking:</strong> Reduces noisy random failures into the smallest human-readable counterexample.</li>
+                  <li><strong>Regression Memory:</strong> Caches past failing inputs in <code class="inline">.hypothesis/</code> and replays them first on future runs.</li>
+                </ul>
+              </div>
+
+              <div class="card-white">
+                <h3><span class="pill pill-red">Downsides</span> Where Hypothesis Alone Falls Short</h3>
+                <ul class="clean red">
+                  <li><strong>The Test Oracle Problem:</strong> Generating inputs is easy, but checking <em>exact</em> outputs often forces you to re-implement the logic in tests.</li>
+                  <li><strong>Probabilistic, Not Exhaustive:</strong> Passing 500 random runs still cannot prove a bug doesn't exist in an untested corner.</li>
+                  <li><strong>Strategy Effort:</strong> Complex valid states require carefully written custom generators to avoid shallow or slow tests.</li>
+                </ul>
+              </div>
+
+              <div class="callout">
+                <strong>Bridge to Lean 4:</strong> Hypothesis excels at <em>input generation &amp; shrinking</em> — Lean 4 fills its biggest gap by supplying a <strong>mathematically verified oracle</strong>.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 4: BRIDGING THE GAP WITH FORMAL VERIFICATION (AFTER) -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">01c / Closing the Gap</div>
+          <h2>How Formal Verification Elevates Property-Based Testing</h2>
+          <p class="subtitle">Adding a <strong>Lean 4 executable specification</strong> fills the upper-right gap — turning Hypothesis from guesswork into specification-backed testing.</p>
+
+          <div class="grid-2-wide">
+            <div class="svg-box">
+              <svg viewBox="0 0 600 390" xmlns="http://www.w3.org/2000/svg">
+                <!-- Axes -->
+                <line x1="55" y1="340" x2="570" y2="340" stroke="#475569" stroke-width="2"/>
+                <line x1="55" y1="340" x2="55" y2="28" stroke="#475569" stroke-width="2"/>
+                <text x="310" y="374" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">STATE SPACE COVERAGE &amp; CONFIDENCE →</text>
+                <text x="22" y="185" text-anchor="middle" font-size="12" font-weight="700" fill="#475569" transform="rotate(-90 22 185)">MATHEMATICAL RIGOR →</text>
+
+                <!-- Level 1: Unit Tests -->
+                <rect x="85" y="255" width="145" height="68" rx="10" fill="#FFF1F2" stroke="#E11D48" stroke-width="1.8" opacity="0.7"/>
+                <text x="157" y="280" text-anchor="middle" font-size="13" font-weight="700" fill="#BE123C">Unit Tests</text>
+                <text x="157" y="298" text-anchor="middle" font-size="11" fill="#475569">pytest examples</text>
+                <text x="157" y="313" text-anchor="middle" font-size="10.5" fill="#475569">Checks known inputs</text>
+
+                <!-- Level 2: PBT -->
+                <rect x="215" y="165" width="175" height="72" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.8"/>
+                <text x="302" y="191" text-anchor="middle" font-size="13" font-weight="700" fill="#B45309">Property-Based Testing</text>
+                <text x="302" y="209" text-anchor="middle" font-size="11" fill="#475569">Hypothesis / Plausible</text>
+                <text x="302" y="224" text-anchor="middle" font-size="10.5" fill="#475569">1000s of random inputs + shrinking</text>
+
+                <!-- Level 3: Formal Verification (NOW ACTIVE!) -->
+                <rect x="355" y="55" width="205" height="82" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2.6"/>
+                <text x="457" y="82" text-anchor="middle" font-size="13.5" font-weight="700" fill="#4338CA">Formal Verification</text>
+                <text x="457" y="101" text-anchor="middle" font-size="11.5" fill="#0F172A">Lean 4 Executable Spec</text>
+                <text x="457" y="118" text-anchor="middle" font-size="10.5" fill="#4338CA" font-weight="600">Universal proofs (∀ inputs)</text>
+
+                <!-- Highlight Sweet Spot Bridge -->
+                <path d="M 390 200 C 440 200, 457 170, 457 140" fill="none" stroke="#0D9488" stroke-width="3.2" stroke-dasharray="6,4"/>
+                <rect x="392" y="218" width="172" height="58" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="2.4"/>
+                <text x="478" y="241" text-anchor="middle" font-size="12" font-weight="700" fill="#0F766E">Sweet Spot (VGD)</text>
+                <text x="478" y="259" text-anchor="middle" font-size="11" fill="#0F172A">Lean 4 Oracle + Hypothesis</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="card-white">
+                <h3><span class="pill pill-red">Solved</span> The Test Oracle Dilemma</h3>
+                <p>Instead of rewriting fragile test expectations in Python, Hypothesis compares your code directly against a <strong>mathematically proved Lean 4 model</strong>.</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-blue">Upgrade</span> What Formal Verification Adds</h3>
+                <ul class="clean">
+                  <li><strong>Spec certainty:</strong> Core invariants are proved for <em>all</em> inputs (∀), not just sampled ones.</li>
+                  <li><strong>Zero duplicated bugs:</strong> The oracle is an independent, minimal, verified model.</li>
+                  <li><strong>Best of both worlds:</strong> Hypothesis explores deep runtime paths; Lean 4 guarantees the ground truth.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 5: REAL-WORLD USE CASES & PROVEN BENEFITS -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">01d / Real-World Impact</div>
+          <h2>Popular Use Cases &amp; Proven Benefits in Production</h2>
+          <p class="subtitle">Executable Specifications + Differential Testing (Lean 4 + PBT/Fuzzing) is already delivering measurable results across industry.</p>
+
+          <!-- Featured Case: AWS Cedar -->
+          <div class="card-white" style="border-left: 5px solid var(--g-blue-dark); margin-bottom: 14px; padding: 14px 20px;">
+            <div style="display:grid; grid-template-columns: 1.35fr 0.65fr; gap: 18px; align-items: center;">
+              <div>
+                <h3 style="margin-bottom: 6px;"><span class="pill pill-blue">Flagship Case</span> AWS Cedar — Authorization Policy Engine</h3>
+                <p>AWS models Cedar's core authorizer &amp; validator in <strong>Lean 4</strong> and implements the production engine in <strong>Rust</strong> (powering AWS Verified Permissions). Instead of proving Rust directly, they bridge both with massive <strong>Differential Random Testing</strong>.</p>
+                <p style="margin-top: 6px;"><strong>Proven Benefit:</strong> Mathematically proved core security invariants (e.g., <code class="inline">forbid</code> always overrides <code class="inline">permit</code>, validator soundness) while catching subtle edge-case bugs before production release.</p>
+              </div>
+              <div class="svg-box">
+                <svg viewBox="0 0 320 112" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="4" y="4" width="148" height="48" rx="9" fill="#EEF2FF" stroke="#4F46E5"/>
+                  <text x="78" y="25" text-anchor="middle" font-size="14" font-weight="700" fill="#4338CA">~5–6 µs</text>
+                  <text x="78" y="42" text-anchor="middle" font-size="10" fill="#475569">Lean 4 eval latency</text>
+
+                  <rect x="164" y="4" width="152" height="48" rx="9" fill="#F0FDFA" stroke="#0D9488"/>
+                  <text x="240" y="25" text-anchor="middle" font-size="14" font-weight="700" fill="#0F766E">10M+ / night</text>
+                  <text x="240" y="42" text-anchor="middle" font-size="10" fill="#475569">Differential random tests</text>
+
+                  <rect x="4" y="60" width="312" height="46" rx="9" fill="#FFFBEB" stroke="#F59E0B"/>
+                  <text x="160" y="80" text-anchor="middle" font-size="11.5" font-weight="700" fill="#B45309">Zero Spec-to-Prod Drift in Production</text>
+                  <text x="160" y="96" text-anchor="middle" font-size="10" fill="#475569">Fast Rust speed + Lean 4 mathematical assurance</text>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3 Other Real-World Domains -->
+          <div class="grid-3">
+            <div class="card">
+              <h3><span class="pill pill-green">FinTech &amp; Billing</span></h3>
+              <p><strong>Use Case:</strong> Discount stacking, fee schedules, quota limits, and double-entry ledgers.</p>
+              <ul class="clean green">
+                <li>Prove conservation laws (no negative balance, exact rounding bounds) in Lean 4.</li>
+                <li>Hypothesis catches multi-rule interaction bugs in Python billing services.</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3><span class="pill pill-blue">Compilers &amp; ML IR</span></h3>
+              <p><strong>Use Case:</strong> Query optimizers, DSLs, and neural-network lowering passes.</p>
+              <ul class="clean">
+                <li>Prove semantic equivalence of rewrites in Lean 4 (<code class="inline">grind</code> / <code class="inline">bv_decide</code>).</li>
+                <li>Python harnesses fuzz thousands of ASTs to catch silent miscompilations.</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3><span class="pill pill-yellow">AI Coding Agents</span></h3>
+              <p><strong>Use Case:</strong> Verifying LLM-generated code, migrations, and policy guardrails (2025–2026).</p>
+              <ul class="clean yellow">
+                <li>Agents emit both Python code and Lean 4 specs/proofs.</li>
+                <li>Lean kernel + Hypothesis form a deterministic gatekeeper before merge.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 6: LEAN 4 BASICS -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">02 / Lean 4 Basics</div>
+          <h2>What Makes Lean 4 Different from Older Proof Assistants?</h2>
+          <p class="subtitle">Lean 4 unifies a dependently typed functional programming language, an interactive theorem prover, and a native C compiler.</p>
+
+          <div class="grid-2">
+            <div class="svg-box">
+              <svg viewBox="0 0 540 380" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <marker id="arrGray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+                  </marker>
+                </defs>
+
+                <!-- Source file -->
+                <rect x="145" y="14" width="250" height="64" rx="12" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2"/>
+                <text x="270" y="40" text-anchor="middle" font-size="14" font-weight="700" fill="#4338CA">Single Lean 4 Codebase</text>
+                <text x="270" y="60" text-anchor="middle" font-size="11.5" fill="#0F172A">Types + Executable Functions + Theorems</text>
+
+                <!-- Split arrows -->
+                <path d="M 210 78 L 135 130" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+                <path d="M 330 78 L 405 130" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+                <!-- Left branch: Proof Kernel -->
+                <rect x="20" y="136" width="230" height="110" rx="12" fill="#FFFFFF" stroke="#0D9488" stroke-width="2"/>
+                <rect x="20" y="136" width="230" height="28" rx="12" fill="#F0FDFA"/>
+                <rect x="20" y="150" width="230" height="14" fill="#F0FDFA"/>
+                <text x="135" y="155" text-anchor="middle" font-size="12" font-weight="700" fill="#0F766E">1. TRUSTED PROOF KERNEL</text>
+                <text x="135" y="185" text-anchor="middle" font-size="12" font-weight="600" fill="#0F172A">Elaborator &amp; Type Checker</text>
+                <text x="135" y="205" text-anchor="middle" font-size="11" fill="#475569">Checks every theorem &amp; #guard</text>
+                <text x="135" y="223" text-anchor="middle" font-size="11" fill="#475569">Zero runtime trust needed</text>
+
+                <!-- Right branch: Compiler -->
+                <rect x="290" y="136" width="230" height="110" rx="12" fill="#FFFFFF" stroke="#F59E0B" stroke-width="2"/>
+                <rect x="290" y="136" width="230" height="28" rx="12" fill="#FFFBEB"/>
+                <rect x="290" y="150" width="230" height="14" fill="#FFFBEB"/>
+                <text x="405" y="155" text-anchor="middle" font-size="12" font-weight="700" fill="#B45309">2. NATIVE C COMPILER</text>
+                <text x="405" y="185" text-anchor="middle" font-size="12" font-weight="600" fill="#0F172A">IR → C → Native Binary</text>
+                <text x="405" y="205" text-anchor="middle" font-size="11" fill="#475569">Proof terms erased at compile time</text>
+                <text x="405" y="223" text-anchor="middle" font-size="11" fill="#475569">Microsecond execution speed</text>
+
+                <!-- Down arrows -->
+                <path d="M 135 246 L 135 288" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+                <path d="M 405 246 L 405 288" stroke="#475569" stroke-width="2" marker-end="url(#arrGray)"/>
+
+                <!-- Bottom boxes -->
+                <rect x="35" y="294" width="200" height="62" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.5"/>
+                <text x="135" y="320" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0F766E">lake test</text>
+                <text x="135" y="340" text-anchor="middle" font-size="11" fill="#0F172A">Mathematical Guarantee</text>
+
+                <rect x="305" y="294" width="200" height="62" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.5"/>
+                <text x="405" y="320" text-anchor="middle" font-size="12.5" font-weight="700" fill="#B45309">lake build</text>
+                <text x="405" y="340" text-anchor="middle" font-size="11" fill="#0F172A">Fast Test Oracle Binary</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="card">
+                <h3><span class="pill pill-blue">Dual Nature</span> Code + Proof Together</h3>
+                <p>In Lean 4, functions and theorems live in the same language. There is no fragile "code extraction" step like in older theorem provers.</p>
+              </div>
+              <div class="card">
+                <h3><span class="pill pill-green">Modern Automation (2025–2026)</span></h3>
+                <ul class="clean green">
+                  <li><code class="inline">grind</code> — SMT-style built-in tactic (congruence closure, E-matching, linear arithmetic).</li>
+                  <li><code class="inline">bv_decide</code> — SAT-backed bitvector &amp; overflow proofs checked by the kernel.</li>
+                  <li><code class="inline">Std.Do / mvcgen</code> — Hoare-logic VC generation for <code class="inline">do</code>-notation code.</li>
+                  <li><code class="inline">Plausible</code> — Built-in QuickCheck-style counterexample finder.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 6: WHAT DOES IT MEAN TO "RUN" A SPEC? -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">02b / Lean 4 Basics</div>
+          <h2>What Does It Mean to "Run" a Spec — and Why Native?</h2>
+          <p class="subtitle">Turning a mathematical specification into a <strong>fast, standalone ground-truth calculator (Test Oracle)</strong>.</p>
+
+          <div class="grid-2">
+            <div class="svg-box">
+              <svg viewBox="0 0 540 385" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <marker id="arrN1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#4338CA"/>
+                  </marker>
+                  <marker id="arrN2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#B45309"/>
+                  </marker>
+                </defs>
+
+                <!-- Top section: What "running" a spec means -->
+                <rect x="8" y="8" width="524" height="156" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
+                <text x="24" y="32" font-size="12" font-weight="700" fill="#4338CA">WHAT "RUNNING A SPEC" MEANS</text>
+
+                <rect x="24" y="48" width="138" height="72" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+                <text x="93" y="72" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0F172A">Concrete Input</text>
+                <text x="93" y="92" text-anchor="middle" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#475569">[0, 3, 1, 4, 2]</text>
+                <text x="93" y="108" text-anchor="middle" font-size="9.5" fill="#64748B">from Hypothesis</text>
+
+                <line x1="162" y1="84" x2="192" y2="84" stroke="#4338CA" stroke-width="2" marker-end="url(#arrN1)"/>
+
+                <rect x="198" y="48" width="144" height="72" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2"/>
+                <text x="270" y="72" text-anchor="middle" font-size="11.5" font-weight="700" fill="#4338CA">Executable Spec</text>
+                <text x="270" y="92" text-anchor="middle" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#0F172A">playMoves</text>
+                <text x="270" y="108" text-anchor="middle" font-size="9.5" fill="#475569">Computable def</text>
+
+                <line x1="342" y1="84" x2="372" y2="84" stroke="#4338CA" stroke-width="2" marker-end="url(#arrN1)"/>
+
+                <rect x="378" y="48" width="138" height="72" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.8"/>
+                <text x="447" y="72" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0F766E">Expected Output</text>
+                <text x="447" y="92" text-anchor="middle" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#0F172A">won("X")</text>
+                <text x="447" y="108" text-anchor="middle" font-size="9.5" fill="#0F766E">Ground Truth!</text>
+
+                <text x="270" y="148" text-anchor="middle" font-size="10.5" fill="#475569">Unlike static Markdown/math specs, Lean 4 computes the exact answer for any input.</text>
+
+                <!-- Bottom section: Native compilation pipeline -->
+                <rect x="8" y="182" width="524" height="192" rx="12" fill="#FFFBEB" fill-opacity="0.45" stroke="#F59E0B" stroke-width="1.6"/>
+                <text x="24" y="206" font-size="12" font-weight="700" fill="#B45309">WHY THE NATIVE COMPILER MATTERS (lake build)</text>
+
+                <rect x="24" y="222" width="118" height="76" rx="10" fill="#FFFFFF" stroke="#4F46E5" stroke-width="1.5"/>
+                <text x="83" y="246" text-anchor="middle" font-size="11" font-weight="700" fill="#4338CA">Spec + Proofs</text>
+                <text x="83" y="264" text-anchor="middle" font-size="10" fill="#475569">def + theorem</text>
+                <text x="83" y="280" text-anchor="middle" font-size="10" fill="#475569">+ Main.lean</text>
+
+                <line x1="142" y1="260" x2="168" y2="260" stroke="#B45309" stroke-width="2" marker-end="url(#arrN2)"/>
+
+                <rect x="174" y="222" width="150" height="76" rx="10" fill="#FFFFFF" stroke="#F59E0B" stroke-width="1.8"/>
+                <text x="249" y="246" text-anchor="middle" font-size="11" font-weight="700" fill="#B45309">Proof Erasure</text>
+                <text x="249" y="264" text-anchor="middle" font-size="10" fill="#0F172A">Theorems stripped</text>
+                <text x="249" y="280" text-anchor="middle" font-size="10" fill="#475569">→ Optimized C code</text>
+
+                <line x1="324" y1="260" x2="350" y2="260" stroke="#B45309" stroke-width="2" marker-end="url(#arrN2)"/>
+
+                <rect x="356" y="222" width="160" height="76" rx="10" fill="#0F172A"/>
+                <text x="436" y="246" text-anchor="middle" font-size="11" font-weight="700" fill="#81C995">Native Binary</text>
+                <text x="436" y="265" text-anchor="middle" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#FFFFFF">~5–6 µs / call</text>
+                <text x="436" y="283" text-anchor="middle" font-size="9.5" fill="#9AA0A6">(AWS Cedar benchmark)</text>
+
+                <!-- Speed comparison bar -->
+                <rect x="24" y="314" width="492" height="44" rx="8" fill="#FFFFFF" stroke="#CBD5E1"/>
+                <text x="40" y="333" font-size="10.5" font-weight="700" fill="#E11D48">Interpreter (#eval / lean --run):</text>
+                <text x="235" y="333" font-size="10.5" fill="#475569">Slow — too costly for 10,000s of fuzz tests</text>
+                <text x="40" y="350" font-size="10.5" font-weight="700" fill="#0F766E">Native Binary (lake build):</text>
+                <text x="235" y="350" font-size="10.5" fill="#0F172A" font-weight="600">1,000s–10,000s checks/sec in pytest!</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div class="card-white">
+                <h3><span class="pill pill-blue">1. Throughput</span> Built for High-Volume Fuzzing</h3>
+                <p>Proof terms exist only for the kernel and are <strong>erased at compile time</strong>. The remaining pure functions compile to fast C, enabling thousands of differential checks per second (or millions nightly).</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-green">2. Zero Extraction</span> No Fragile Glue Layer</h3>
+                <p>Older provers (Coq, Isabelle) required translating specs to OCaml/Haskell to run them. Lean 4 compiles your <strong>exact verified functions</strong> directly alongside <code class="inline">Lean.Data.Json</code> and <code class="inline">IO</code>.</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">3. Standalone</span> Clean CI Integration</h3>
+                <p>The output (<code class="inline">tictactoe_oracle</code>) is a self-contained binary. <code class="inline">pytest</code> calls it via <code class="inline">subprocess.Popen</code> without starting the Lean compiler or type-checker at test time.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 7: LEAN 4 BUILDING BLOCKS -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">02 / Lean 4 Basics</div>
+          <h2>Essential Lean 4 Building Blocks in 60 Seconds</h2>
+          <p class="subtitle">Just 5 keywords cover 90% of what you need to write executable software specifications.</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>Lean 4 Primer</span>
+              </div>
+              <pre><span class="cm">-- 1. Algebraic Data Type (Enum / Tagged Union)</span>
+<span class="kw">inductive</span> <span class="ty">Player</span> <span class="kw">where</span>
+  | X | O
+  <span class="kw">deriving</span> <span class="ty">BEq</span>, <span class="ty">DecidableEq</span>, <span class="ty">Repr</span>
+
+<span class="cm">-- 2. Record / Dataclass</span>
+<span class="kw">structure</span> <span class="ty">GameState</span> <span class="kw">where</span>
+  board  : <span class="ty">List</span> (<span class="ty">Option</span> <span class="ty">Player</span>)
+  turn   : <span class="ty">Player</span>
+  status : <span class="ty">GameStatus</span>
+
+<span class="cm">-- 3. Pure Total Function (executable!)</span>
+<span class="kw">def</span> <span class="fn">Player.other</span> : <span class="ty">Player</span> → <span class="ty">Player</span>
+  | .X => .O
+  | .O => .X
+
+<span class="cm">-- 4. Theorem (checked by Lean kernel at build time)</span>
+<span class="kw">theorem</span> <span class="fn">other_involutive</span> (p : <span class="ty">Player</span>) :
+    p.other.other = p := <span class="kw">by</span>
+  <span class="kw">cases</span> p &lt;;&gt; <span class="kw">rfl</span>
+
+<span class="cm">-- 5. Elaboration-time assertion (fails build if false)</span>
+<span class="kw">#guard</span> <span class="ty">Player</span>.X.other == .O</pre>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div class="card-white">
+                <h3><span class="pill pill-blue">inductive &amp; structure</span></h3>
+                <p>Define strict, exhaustive domain models. Illegal states (like a player other than X/O) become unrepresentable at compile time.</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-green">def &amp; Except</span></h3>
+                <p>Functions are pure by default. Instead of raising runtime exceptions, return <code class="inline">Except String GameState</code> so every error path is explicit.</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">theorem &amp; #guard</span></h3>
+                <p><strong><code class="inline">theorem</code></strong> proves a property for <em>all</em> possible inputs. <strong><code class="inline">#guard</code></strong> runs concrete sanity checks during compilation (<code class="inline">lake test</code>).</p>
+              </div>
+              <div class="callout">
+                <strong>Toolchain:</strong> Managed by <code class="inline">elan</code> + <code class="inline">lake</code> (similar to <code class="inline">rustup</code> + <code class="inline">cargo</code> or <code class="inline">uv</code>).
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 5: COMBINING WITH PYTHON (VGD) -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">03 / Core Concept</div>
+          <h2>Combining Lean 4 with Python: Verification-Guided Development</h2>
+          <p class="subtitle">Don't try to formally verify dynamic Python code directly. Instead, prove the Lean 4 spec and lock Python to it via Differential Testing.</p>
+
+          <div class="svg-box" style="height: 330px;">
+            <svg viewBox="0 0 1120 315" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <marker id="arrB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#4338CA"/>
+                </marker>
+                <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#0D9488"/>
+                </marker>
+                <marker id="arrY" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#B45309"/>
+                </marker>
+              </defs>
+
+              <!-- Box 1: Hypothesis Generator -->
+              <rect x="16" y="88" width="220" height="136" rx="14" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+              <text x="126" y="116" text-anchor="middle" font-size="13" font-weight="700" fill="#B45309">1. HYPOTHESIS</text>
+              <text x="126" y="140" text-anchor="middle" font-size="12" font-weight="600" fill="#0F172A">Random Input Generator</text>
+              <text x="126" y="162" text-anchor="middle" font-size="11.5" fill="#475569">moves = [0, 4, 1, 9, 2]</text>
+              <text x="126" y="182" text-anchor="middle" font-size="11" fill="#475569">• Out-of-bounds &amp; duplicates</text>
+              <text x="126" y="200" text-anchor="middle" font-size="11" fill="#475569">• Auto-shrinks failing cases</text>
+
+              <!-- Split arrows from Hypothesis -->
+              <path d="M 236 130 L 315 78" fill="none" stroke="#4338CA" stroke-width="2.4" marker-end="url(#arrB)"/>
+              <path d="M 236 182 L 315 234" fill="none" stroke="#0D9488" stroke-width="2.4" marker-end="url(#arrG)"/>
+              <text x="275" y="92" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338CA">JSON</text>
+              <text x="275" y="232" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0F766E">list[int]</text>
+
+              <!-- Box 2A: Lean 4 Oracle -->
+              <rect x="322" y="16" width="330" height="122" rx="14" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2"/>
+              <text x="487" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#4338CA">2A. LEAN 4 EXECUTABLE SPEC</text>
+              <text x="487" y="64" text-anchor="middle" font-size="12" font-weight="600" fill="#0F172A">tictactoe_oracle (Native Binary)</text>
+              <text x="487" y="86" text-anchor="middle" font-size="11.5" fill="#475569">Invariants mathematically proved in Proofs.lean</text>
+              <rect x="372" y="100" width="230" height="24" rx="12" fill="#FFFFFF" stroke="#4F46E5" stroke-width="1"/>
+              <text x="487" y="116" text-anchor="middle" font-size="11" font-weight="700" fill="#4338CA">expected = {"ok": false, "error": ...}</text>
+
+              <!-- Box 2B: Python Implementation -->
+              <rect x="322" y="176" width="330" height="122" rx="14" fill="#F0FDFA" stroke="#0D9488" stroke-width="2"/>
+              <text x="487" y="202" text-anchor="middle" font-size="13" font-weight="700" fill="#0F766E">2B. PYTHON PRODUCTION CODE</text>
+              <text x="487" y="224" text-anchor="middle" font-size="12" font-weight="600" fill="#0F172A">tictactoe/game.py :: play_moves()</text>
+              <text x="487" y="246" text-anchor="middle" font-size="11.5" fill="#475569">Fast, readable, idiomatic production Python</text>
+              <rect x="372" y="260" width="230" height="24" rx="12" fill="#FFFFFF" stroke="#0D9488" stroke-width="1"/>
+              <text x="487" y="276" text-anchor="middle" font-size="11" font-weight="700" fill="#0F766E">actual = {"ok": false, "error": ...}</text>
+
+              <!-- Arrows to Comparator -->
+              <path d="M 652 78 L 748 134" fill="none" stroke="#4338CA" stroke-width="2.4" marker-end="url(#arrB)"/>
+              <path d="M 652 234 L 748 178" fill="none" stroke="#0D9488" stroke-width="2.4" marker-end="url(#arrG)"/>
+
+              <!-- Box 3: Comparator -->
+              <rect x="756" y="88" width="346" height="136" rx="14" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+              <rect x="756" y="88" width="346" height="32" rx="14" fill="#0F172A"/>
+              <rect x="756" y="106" width="346" height="14" fill="#0F172A"/>
+              <text x="929" y="109" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">3. DIFFERENTIAL ASSERTION</text>
+              <text x="929" y="148" text-anchor="middle" font-size="15" font-weight="700" font-family="JetBrains Mono, monospace" fill="#4338CA">assert actual == expected</text>
+              <text x="929" y="176" text-anchor="middle" font-size="11.5" fill="#0F766E" font-weight="600">✓ Match → Python obeys verified spec</text>
+              <text x="929" y="198" text-anchor="middle" font-size="11.5" fill="#E11D48" font-weight="600">✗ Mismatch → Shrink to minimal bug repro</text>
+            </svg>
+          </div>
+
+          <div class="callout green">
+            <strong>Proven in Production:</strong> This is the same architecture used by AWS for the <strong>Cedar</strong> authorization engine (Lean 4 spec + Rust production + millions of nightly differential tests), adapted cleanly for Python + <code class="inline">uv</code> + <code class="inline">Hypothesis</code>.
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 9: WHY NOT BUILD THE WHOLE APP IN LEAN 4? -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">03b / Architecture Trade-off</div>
+          <h2>Wait — Why Not Just Build the Whole App in Lean 4?</h2>
+          <p class="subtitle">Lean 4 <em>can</em> build real programs (its own compiler is in Lean 4!), but separating <strong>Spec</strong> and <strong>Production App</strong> wins in practice.</p>
+
+          <div class="grid-2">
+            <div class="svg-box">
+              <svg viewBox="0 0 530 385" xmlns="http://www.w3.org/2000/svg">
+                <!-- Outer App Container -->
+                <rect x="10" y="10" width="510" height="365" rx="14" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6"/>
+                <text x="265" y="36" text-anchor="middle" font-size="13" font-weight="700" fill="#0F172A">Anatomy of a Typical Production Application</text>
+
+                <!-- 80-90% App Shell -->
+                <rect x="28" y="52" width="474" height="128" rx="12" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.8"/>
+                <text x="46" y="76" font-size="12" font-weight="700" fill="#0F766E">80–90% Application Shell &amp; Ecosystem (Keep in Python / Go / Rust)</text>
+                <g font-size="11" fill="#0F172A">
+                  <rect x="46" y="90" width="136" height="32" rx="6" fill="#FFFFFF" stroke="#0D9488"/>
+                  <text x="114" y="110" text-anchor="middle">Web / API (FastAPI)</text>
+                  <rect x="196" y="90" width="136" height="32" rx="6" fill="#FFFFFF" stroke="#0D9488"/>
+                  <text x="264" y="110" text-anchor="middle">Cloud SDKs &amp; DBs</text>
+                  <rect x="346" y="90" width="138" height="32" rx="6" fill="#FFFFFF" stroke="#0D9488"/>
+                  <text x="415" y="110" text-anchor="middle">AI/ML (PyTorch/NumPy)</text>
+                </g>
+                <text x="265" y="156" text-anchor="middle" font-size="11" fill="#475569">Low ROI for formal proofs — needs mature libraries &amp; fast iteration</text>
+
+                <!-- 10-20% Critical Core -->
+                <rect x="28" y="196" width="474" height="162" rx="12" fill="#FFFFFF" stroke="#4F46E5" stroke-width="2"/>
+                <text x="46" y="220" font-size="12" font-weight="700" fill="#4338CA">10–20% Critical Core Logic (AuthZ, Billing, State Machines)</text>
+
+                <!-- Left: Optimized Prod -->
+                <rect x="46" y="236" width="202" height="104" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.6"/>
+                <text x="147" y="258" text-anchor="middle" font-size="11.5" font-weight="700" fill="#B45309">Production Code (Python)</text>
+                <text x="147" y="278" text-anchor="middle" font-size="10.5" fill="#0F172A">Optimized for speed</text>
+                <text x="147" y="295" text-anchor="middle" font-size="10" fill="#475569">Caches, batching, NumPy,</text>
+                <text x="147" y="311" text-anchor="middle" font-size="10" fill="#475569">idiomatic for the team</text>
+                <text x="147" y="330" text-anchor="middle" font-size="9.5" font-weight="700" fill="#BE123C">Hard to prove directly</text>
+
+                <!-- Bridge arrow -->
+                <text x="265" y="280" text-anchor="middle" font-size="11" font-weight="700" fill="#4338CA">Diff</text>
+                <text x="265" y="296" text-anchor="middle" font-size="13" font-weight="700" fill="#4338CA">↔</text>
+                <text x="265" y="311" text-anchor="middle" font-size="10" font-weight="700" fill="#4338CA">Test</text>
+
+                <!-- Right: Lean 4 Spec -->
+                <rect x="282" y="236" width="202" height="104" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.6"/>
+                <text x="383" y="258" text-anchor="middle" font-size="11.5" font-weight="700" fill="#4338CA">Executable Spec (Lean 4)</text>
+                <text x="383" y="278" text-anchor="middle" font-size="10.5" fill="#0F172A">Optimized for clarity</text>
+                <text x="383" y="295" text-anchor="middle" font-size="10" fill="#475569">Pure recursion, simple</text>
+                <text x="383" y="311" text-anchor="middle" font-size="10" fill="#475569">algebraic data types</text>
+                <text x="383" y="330" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0F766E">Easy to prove formally!</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:11px;">
+              <div class="card-white">
+                <h3><span class="pill pill-red">1. Ecosystem</span> Libraries &amp; Cloud Integrations</h3>
+                <p>Lean 4 shines in math &amp; verification, not Web frameworks, Cloud SDKs, ORMs, or AI/ML stacks. Rebuilding that ecosystem wastes time.</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">2. Provable ≠ Fast</span> Decouple Clarity from Speed</h3>
+                <p>Simple pure code is easy to prove; cached/vectorized production code breaks proofs on every refactor. Keeping them separate lets both excel.</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-blue">3. Team Reality</span> No Rewrite Needed</h3>
+                <p>Existing Python teams keep shipping normally while a small group (or AI agents) maintains the Lean 4 spec for critical invariants.</p>
+              </div>
+              <div class="callout green" style="margin-top: 2px;">
+                <strong>Exception:</strong> For tiny, pure, ultra-critical cores (e.g., policy engine or parser), compiling Lean 4 to a <strong>C ABI shared library</strong> and calling it via Python FFI <em>is</em> a viable option.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 10: HOW DO WE VERIFY PYTHON <-> LEAN MAPPING? -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">03c / Mapping Assurance</div>
+          <h2>How Do We Know Python &amp; Lean 4 Are Mapped Correctly?</h2>
+          <p class="subtitle">There is no automatic compiler proof linking Python to Lean — instead, <strong>4 engineering layers</strong> keep the mapping airtight.</p>
+
+          <div class="grid-2">
+            <div class="svg-box">
+              <svg viewBox="0 0 530 385" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <marker id="arrM1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+                  </marker>
+                </defs>
+
+                <!-- Layer 1 -->
+                <rect x="14" y="10" width="502" height="68" rx="11" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.8"/>
+                <text x="32" y="34" font-size="12" font-weight="700" fill="#4338CA">LAYER 1: Strict 1-to-1 Boundary Contract (JSON Schema)</text>
+                <text x="32" y="55" font-size="11" fill="#0F172A">Identical inputs, outputs, nulls, and error codes across Python &amp; Lean</text>
+
+                <line x1="265" y1="78" x2="265" y2="96" stroke="#475569" stroke-width="2" marker-end="url(#arrM1)"/>
+
+                <!-- Layer 2 -->
+                <rect x="14" y="100" width="502" height="68" rx="11" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.8"/>
+                <text x="32" y="124" font-size="12" font-weight="700" fill="#B45309">LAYER 2: Behavioral Equivalence (Hypothesis Differential Test)</text>
+                <text x="32" y="145" font-size="11" fill="#0F172A">Verify Python(x) == Lean(x) across 1,000s of normal &amp; error paths</text>
+
+                <line x1="265" y1="168" x2="265" y2="186" stroke="#475569" stroke-width="2" marker-end="url(#arrM1)"/>
+
+                <!-- Layer 3 -->
+                <rect x="14" y="190" width="502" height="68" rx="11" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.8"/>
+                <text x="32" y="214" font-size="12" font-weight="700" fill="#0F766E">LAYER 3: Branch Coverage (100%) + Mutation Testing (mutmut)</text>
+                <text x="32" y="235" font-size="11" fill="#0F172A">Prove every Python branch is exercised &amp; any bug injection gets caught</text>
+
+                <line x1="265" y1="258" x2="265" y2="276" stroke="#475569" stroke-width="2" marker-end="url(#arrM1)"/>
+
+                <!-- Layer 4: Blind spot closure -->
+                <rect x="14" y="280" width="502" height="92" rx="11" fill="#0F172A"/>
+                <text x="32" y="305" font-size="12" font-weight="700" fill="#F28B82">BLIND SPOT: What if BOTH Python &amp; Lean have the same spec bug?</text>
+                <text x="32" y="328" font-size="11.5" fill="#E2E8F0">Differential testing alone won't flag matching bugs in both implementations.</text>
+                <text x="32" y="352" font-size="11.5" font-weight="700" fill="#81C995">→ Caught by Lean 4 Formal Proofs (Proofs.lean invariants fail to prove!)</text>
+              </svg>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:11px;">
+              <div class="card-white">
+                <h3><span class="pill pill-blue">Contract</span> Lock the I/O Boundary</h3>
+                <p>Even if Python uses loops and Lean uses <code class="inline">foldlM</code>, matching the exact JSON response &amp; error strings guarantees black-box alignment.</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-green">Audit</span> Coverage &amp; Mutation Testing</h3>
+                <p>Run <code class="inline">pytest --cov</code> to verify 100% Python branch coverage under differential tests, and use mutation testing (<code class="inline">mutmut</code>) to ensure no unmapped logic slips by.</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">Zero Drift</span> CI Enforces Sync</h3>
+                <p>Editing only Python or only Lean immediately turns CI red — preventing silent divergence between spec and production code.</p>
+              </div>
+              <div class="callout" style="margin-top: 2px;">
+                <strong>Clean Division of Labor:</strong> <em>Lean Proofs</em> verify spec correctness; <em>Differential + Mutation Testing</em> verify Python↔Lean mapping.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 11: PROJECT LAYOUT -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">04 / Sample Architecture</div>
+          <h2>Tic-Tac-Toe Sample Setup: Anatomy of the Repo</h2>
+          <p class="subtitle">6 small, focused files work together in <code class="inline">lean4-tictactoe-test/</code>.</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>Project Directory Tree</span>
+              </div>
+              <pre>lean4-tictactoe-test/
+├── pyproject.toml           <span class="cm"># uv + pytest + hypothesis</span>
+├── <span class="fn">tictactoe/</span>
+│   └── <span class="fn">game.py</span>              <span class="cm"># Step 1: Production Python</span>
+├── <span class="kw">lean_spec/</span>
+│   ├── lean-toolchain       <span class="cm"># Pins Lean v4.22.0</span>
+│   ├── lakefile.toml        <span class="cm"># Build + testDriver config</span>
+│   ├── <span class="kw">TicTacToe/</span>
+│   │   ├── <span class="kw">Spec.lean</span>        <span class="cm"># Step 2: Executable Spec</span>
+│   │   └── <span class="kw">Proofs.lean</span>      <span class="cm"># Step 3: Theorems + #guard</span>
+│   └── <span class="ty">Main.lean</span>            <span class="cm"># Step 4: JSON Lines Oracle</span>
+└── <span class="st">tests/</span>
+    ├── <span class="ty">conftest.py</span>          <span class="cm"># Step 5: Persistent fixture</span>
+    ├── test_unit.py         <span class="cm"># Standard unit tests</span>
+    └── <span class="st">test_differential.py</span> <span class="cm"># Step 6: Hypothesis tests</span></pre>
+            </div>
+
+            <div class="svg-box">
+              <svg viewBox="0 0 500 385" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <marker id="arrD" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+                  </marker>
+                </defs>
+                <!-- Step cards vertical flow -->
+                <rect x="20" y="8" width="460" height="50" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.6"/>
+                <text x="38" y="30" font-size="11" font-weight="700" fill="#0F766E">STEP 1</text>
+                <text x="95" y="30" font-size="13" font-weight="700" fill="#0F172A">tictactoe/game.py</text>
+                <text x="95" y="47" font-size="11" fill="#475569">Pure Python state machine returning JSON-compatible dicts</text>
+
+                <rect x="20" y="70" width="460" height="50" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.6"/>
+                <text x="38" y="92" font-size="11" font-weight="700" fill="#4338CA">STEP 2</text>
+                <text x="95" y="92" font-size="13" font-weight="700" fill="#0F172A">lean_spec/TicTacToe/Spec.lean</text>
+                <text x="95" y="109" font-size="11" fill="#475569">Clean Lean 4 reference model (Player, Board, applyMove)</text>
+
+                <rect x="20" y="132" width="460" height="50" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.6"/>
+                <text x="38" y="154" font-size="11" font-weight="700" fill="#4338CA">STEP 3</text>
+                <text x="95" y="154" font-size="13" font-weight="700" fill="#0F172A">lean_spec/TicTacToe/Proofs.lean</text>
+                <text x="95" y="171" font-size="11" fill="#475569">Formal invariants (theorem) + compile-time #guard checks</text>
+
+                <rect x="20" y="194" width="460" height="50" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.6"/>
+                <text x="38" y="216" font-size="11" font-weight="700" fill="#B45309">STEP 4</text>
+                <text x="95" y="216" font-size="13" font-weight="700" fill="#0F172A">lean_spec/Main.lean</text>
+                <text x="95" y="233" font-size="11" fill="#475569">Compiled native binary: persistent stdin/stdout JSON Lines loop</text>
+
+                <rect x="20" y="256" width="460" height="50" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.6"/>
+                <text x="38" y="278" font-size="11" font-weight="700" fill="#B45309">STEP 5</text>
+                <text x="95" y="278" font-size="13" font-weight="700" fill="#0F172A">tests/conftest.py</text>
+                <text x="95" y="295" font-size="11" fill="#475569">Session-scoped pytest fixture spawning the oracle once</text>
+
+                <rect x="20" y="318" width="460" height="50" rx="10" fill="#FFF1F2" stroke="#E11D48" stroke-width="1.6"/>
+                <text x="38" y="340" font-size="11" font-weight="700" fill="#BE123C">STEP 6</text>
+                <text x="95" y="340" font-size="13" font-weight="700" fill="#0F172A">tests/test_differential.py</text>
+                <text x="95" y="357" font-size="11" fill="#475569">Hypothesis fuzzing comparing Python vs. Lean 4 on 1000+ cases</text>
+              </svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 7: STEP 1 - PYTHON PRODUCTION CODE -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow"><span class="pill pill-green">Step 1 of 6</span> Production Python</div>
+          <h2>Decouple Pure Business Logic from I/O</h2>
+          <p class="subtitle">Keep the core rules pure and deterministic in <code class="inline">tictactoe/game.py</code> with a clean JSON-compatible contract.</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>tictactoe/game.py</span>
+              </div>
+              <pre><span class="kw">def</span> <span class="fn">apply_move</span>(state: <span class="ty">GameState</span>, pos: <span class="ty">int</span>):
+    <span class="kw">if</span> state.status != <span class="st">"ongoing"</span>:
+        <span class="kw">return</span> <span class="kw">None</span>, <span class="st">"game_over"</span>
+    <span class="kw">if</span> pos &lt; <span class="num">0</span> <span class="kw">or</span> pos &gt;= <span class="num">9</span>:
+        <span class="kw">return</span> <span class="kw">None</span>, <span class="st">"out_of_bounds"</span>
+    <span class="kw">if</span> state.board[pos] <span class="kw">is not None</span>:
+        <span class="kw">return</span> <span class="kw">None</span>, <span class="st">"cell_occupied"</span>
+
+    new_board = _place(state.board, pos, state.turn)
+    <span class="kw">if</span> _has_won(new_board, state.turn):
+        <span class="kw">return</span> <span class="ty">GameState</span>(new_board, state.turn, <span class="st">"won"</span>, state.turn), <span class="kw">None</span>
+    <span class="kw">if</span> all(c <span class="kw">is not None</span> <span class="kw">for</span> c <span class="kw">in</span> new_board):
+        <span class="kw">return</span> <span class="ty">GameState</span>(new_board, state.turn, <span class="st">"draw"</span>, <span class="kw">None</span>), <span class="kw">None</span>
+    <span class="kw">return</span> <span class="ty">GameState</span>(new_board, _other(state.turn), <span class="st">"ongoing"</span>, <span class="kw">None</span>), <span class="kw">None</span>
+
+<span class="kw">def</span> <span class="fn">play_moves</span>(moves: <span class="ty">list</span>[<span class="ty">int</span>]) -&gt; <span class="ty">dict</span>:
+    state = initial_state()
+    <span class="kw">for</span> pos <span class="kw">in</span> moves:
+        state, err = apply_move(state, pos)
+        <span class="kw">if</span> err:
+            <span class="kw">return</span> {<span class="st">"ok"</span>: <span class="kw">False</span>, <span class="st">"error"</span>: err}
+    <span class="kw">return</span> state.to_dict()</pre>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="card-white">
+                <h3>Design Principle: Functional Core</h3>
+                <ul class="clean green">
+                  <li><strong>Immutable state:</strong> <code class="inline">@dataclass(frozen=True)</code> with tuple board avoids mutation bugs.</li>
+                  <li><strong>Explicit error codes:</strong> Returning <code class="inline">"game_over"</code> / <code class="inline">"out_of_bounds"</code> / <code class="inline">"cell_occupied"</code> maps 1-to-1 to Lean's <code class="inline">Except</code>.</li>
+                  <li><strong>Replayable entrypoint:</strong> <code class="inline">play_moves(moves)</code> takes a plain list of ints — ideal for fuzzing!</li>
+                </ul>
+              </div>
+              <div class="card">
+                <h3>Shared JSON Wire Contract</h3>
+                <p><strong>Success:</strong></p>
+                <p><code class="inline">{"ok": true, "board": ["X", ...], "turn": "O", "status": "ongoing", "winner": null}</code></p>
+                <p><strong>Error:</strong></p>
+                <p><code class="inline">{"ok": false, "error": "cell_occupied"}</code></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 8: STEP 2 - EXECUTABLE SPEC -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow"><span class="pill pill-blue">Step 2 of 6</span> Executable Specification</div>
+          <h2>Modeling the Rules Cleanly in <code class="inline">Spec.lean</code></h2>
+          <p class="subtitle">The specification is short, declarative, and directly executable — serving as the single source of truth.</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>lean_spec/TicTacToe/Spec.lean</span>
+              </div>
+              <pre><span class="kw">inductive</span> <span class="ty">GameStatus</span> <span class="kw">where</span>
+  | ongoing | won (p : <span class="ty">Player</span>) | draw
+  <span class="kw">deriving</span> <span class="ty">BEq</span>, <span class="ty">DecidableEq</span>, <span class="ty">Repr</span>
+
+<span class="kw">def</span> <span class="fn">applyMove</span> (s : <span class="ty">GameState</span>) (pos : <span class="ty">Nat</span>)
+    : <span class="ty">Except</span> <span class="ty">String</span> <span class="ty">GameState</span> :=
+  <span class="kw">if</span> s.status != .ongoing <span class="kw">then</span>
+    .error <span class="st">"game_over"</span>
+  <span class="kw">else if</span> pos ≥ <span class="num">9</span> <span class="kw">then</span>
+    .error <span class="st">"out_of_bounds"</span>
+  <span class="kw">else if</span> cellAt s.board pos != none <span class="kw">then</span>
+    .error <span class="st">"cell_occupied"</span>
+  <span class="kw">else</span>
+    <span class="kw">let</span> board' := s.board.set pos (some s.turn)
+    <span class="kw">if</span> hasWon board' s.turn <span class="kw">then</span>
+      .ok { board := board', turn := s.turn, status := .won s.turn }
+    <span class="kw">else if</span> isFull board' <span class="kw">then</span>
+      .ok { board := board', turn := s.turn, status := .draw }
+    <span class="kw">else</span>
+      .ok { board := board', turn := s.turn.other, status := .ongoing }
+
+<span class="kw">def</span> <span class="fn">playMoves</span> (moves : <span class="ty">List</span> <span class="ty">Nat</span>) : <span class="ty">Except</span> <span class="ty">String</span> <span class="ty">GameState</span> :=
+  moves.foldlM applyMove initialState</pre>
+            </div>
+
+            <div class="svg-box">
+              <svg viewBox="0 0 480 370" xmlns="http://www.w3.org/2000/svg">
+                <text x="240" y="24" text-anchor="middle" font-size="13" font-weight="700" fill="#0F172A">Type Mapping: Python ↔ Lean 4</text>
+
+                <!-- Headers -->
+                <rect x="16" y="42" width="195" height="32" rx="8" fill="#F0FDFA"/>
+                <text x="113" y="63" text-anchor="middle" font-size="12" font-weight="700" fill="#0F766E">Python (game.py)</text>
+
+                <rect x="269" y="42" width="195" height="32" rx="8" fill="#EEF2FF"/>
+                <text x="366" y="63" text-anchor="middle" font-size="12" font-weight="700" fill="#4338CA">Lean 4 (Spec.lean)</text>
+
+                <!-- Rows -->
+                <g font-family="JetBrains Mono, monospace" font-size="11.5">
+                  <rect x="16" y="88" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="113" y="114" text-anchor="middle" fill="#0F172A">Literal["X", "O"]</text>
+                  <line x1="215" y1="110" x2="265" y2="110" stroke="#475569" stroke-width="1.8" stroke-dasharray="4,3"/>
+                  <rect x="269" y="88" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="366" y="114" text-anchor="middle" fill="#4338CA">inductive Player</text>
+
+                  <rect x="16" y="146" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="113" y="172" text-anchor="middle" fill="#0F172A">Player | None</text>
+                  <line x1="215" y1="168" x2="265" y2="168" stroke="#475569" stroke-width="1.8" stroke-dasharray="4,3"/>
+                  <rect x="269" y="146" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="366" y="172" text-anchor="middle" fill="#4338CA">Option Player</text>
+
+                  <rect x="16" y="204" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="113" y="230" text-anchor="middle" fill="#0F172A">(State | None, err)</text>
+                  <line x1="215" y1="226" x2="265" y2="226" stroke="#475569" stroke-width="1.8" stroke-dasharray="4,3"/>
+                  <rect x="269" y="204" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="366" y="230" text-anchor="middle" fill="#4338CA">Except String State</text>
+
+                  <rect x="16" y="262" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="113" y="288" text-anchor="middle" fill="#0F172A">for pos in moves:</text>
+                  <line x1="215" y1="284" x2="265" y2="284" stroke="#475569" stroke-width="1.8" stroke-dasharray="4,3"/>
+                  <rect x="269" y="262" width="195" height="44" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+                  <text x="366" y="288" text-anchor="middle" fill="#4338CA">moves.foldlM applyMove</text>
+                </g>
+
+                <rect x="16" y="322" width="448" height="36" rx="8" fill="#FFFBEB" stroke="#F59E0B"/>
+                <text x="240" y="344" text-anchor="middle" font-size="11.5" font-weight="600" fill="#0F172A">Zero external Lean deps (no Mathlib) → builds in seconds!</text>
+              </svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 9: STEP 3 - FORMAL PROOFS & #guard -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow"><span class="pill pill-blue">Step 3 of 6</span> Formal Proofs &amp; Compile-Time Checks</div>
+          <h2>Proving Spec Invariants in <code class="inline">Proofs.lean</code></h2>
+          <p class="subtitle">Before trusting the oracle, Lean's kernel mathematically verifies its properties during <code class="inline">lake test</code>.</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>lean_spec/TicTacToe/Proofs.lean</span>
+              </div>
+              <pre><span class="cm">-- 1. Universal Theorems (hold for ALL states &amp; moves)</span>
+<span class="kw">theorem</span> <span class="fn">applyMove_rejects_finished_game</span>
+    (s : <span class="ty">GameState</span>) (pos : <span class="ty">Nat</span>)
+    (hdone : s.status ≠ .ongoing) :
+    applyMove s pos = .error <span class="st">"game_over"</span> := <span class="kw">by</span>
+  <span class="kw">unfold</span> applyMove; <span class="kw">simp</span> [hdone]
+
+<span class="kw">theorem</span> <span class="fn">applyMove_rejects_out_of_bounds</span>
+    (s : <span class="ty">GameState</span>) (pos : <span class="ty">Nat</span>)
+    (hongoing : s.status = .ongoing) (hge : pos ≥ <span class="num">9</span>) :
+    applyMove s pos = .error <span class="st">"out_of_bounds"</span> := <span class="kw">by</span>
+  <span class="kw">unfold</span> applyMove; <span class="kw">simp</span> [hongoing, hge]
+
+<span class="kw">theorem</span> <span class="fn">applyMove_preserves_board_length</span> ... :
+    s'.board.length = s.board.length := ...
+
+<span class="cm">-- 2. Elaboration-time concrete assertions</span>
+<span class="kw">#guard</span> playMoves [<span class="num">0</span>, <span class="num">0</span>] == .error <span class="st">"cell_occupied"</span>
+<span class="kw">#guard</span> playMoves [<span class="num">0</span>, <span class="num">3</span>, <span class="num">1</span>, <span class="num">4</span>, <span class="num">2</span>, <span class="num">5</span>] == .error <span class="st">"game_over"</span></pre>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="card-white">
+                <h3><span class="pill pill-blue">lakefile.toml</span> Native <code class="inline">lake test</code></h3>
+                <p>Setting <code class="inline">testDriver = "TicTacToe"</code> turns library elaboration itself into a test runner: if any theorem proof breaks or any <code class="inline">#guard</code> evaluates to <code class="inline">false</code>, <code class="inline">lake test</code> exits non-zero.</p>
+              </div>
+              <div class="card">
+                <h3>What These Proofs Guarantee</h3>
+                <ul class="clean">
+                  <li><strong>Safety:</strong> A finished game can <em>never</em> accept another move.</li>
+                  <li><strong>Bounds:</strong> Coordinates ≥ 9 are <em>always</em> rejected cleanly.</li>
+                  <li><strong>Structural integrity:</strong> Board length stays invariant (9) across every valid transition.</li>
+                </ul>
+              </div>
+              <div class="callout yellow">
+                <strong>Pro Tip:</strong> For complex specs, try <code class="inline">by plausible</code> first to falsify buggy theorems before spending time proving them!
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 10: STEP 4 & 5 - PERSISTENT JSON ORACLE -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow"><span class="pill pill-yellow">Steps 4 &amp; 5 of 6</span> Fast Bridge</div>
+          <h2>Persistent JSON Lines Oracle (<code class="inline">Main.lean</code> + <code class="inline">conftest.py</code>)</h2>
+          <p class="subtitle">Spawning a subprocess per test case is slow. A persistent stdin/stdout pipe achieves thousands of checks per second.</p>
+
+          <div class="svg-box" style="height: 225px; margin-bottom: 14px;">
+            <svg viewBox="0 0 1100 215" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <marker id="aB2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#4338CA"/>
+                </marker>
+                <marker id="aG2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#0D9488"/>
+                </marker>
+              </defs>
+
+              <!-- Lifelines -->
+              <rect x="40" y="10" width="260" height="42" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="2"/>
+              <text x="170" y="36" text-anchor="middle" font-size="13" font-weight="700" fill="#0F766E">pytest (conftest.py fixture)</text>
+              <line x1="170" y1="52" x2="170" y2="205" stroke="#0D9488" stroke-width="2" stroke-dasharray="5,4"/>
+
+              <rect x="800" y="10" width="260" height="42" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2"/>
+              <text x="930" y="36" text-anchor="middle" font-size="13" font-weight="700" fill="#4338CA">tictactoe_oracle (Main.lean)</text>
+              <line x1="930" y1="52" x2="930" y2="205" stroke="#4F46E5" stroke-width="2" stroke-dasharray="5,4"/>
+
+              <!-- Step 1: Popen -->
+              <line x1="170" y1="78" x2="922" y2="78" stroke="#475569" stroke-width="2" marker-end="url(#aB2)"/>
+              <rect x="395" y="62" width="310" height="22" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+              <text x="550" y="77" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">1. Spawn ONCE per pytest session (Popen)</text>
+
+              <!-- Loop box -->
+              <rect x="135" y="96" width="830" height="74" rx="10" fill="#FFFBEB" fill-opacity="0.45" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="6,4"/>
+              <text x="150" y="112" font-size="10.5" font-weight="700" fill="#B45309">REPEAT 1,000+ TIMES (Hypothesis loop)</text>
+
+              <!-- Request -->
+              <line x1="170" y1="128" x2="922" y2="128" stroke="#4338CA" stroke-width="2.2" marker-end="url(#aB2)"/>
+              <text x="550" y="122" text-anchor="middle" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#4338CA">stdin:  {"moves": [0, 3, 1, 4, 2]}\n  (flush)</text>
+
+              <!-- Response -->
+              <line x1="930" y1="156" x2="178" y2="156" stroke="#0D9488" stroke-width="2.2" marker-end="url(#aG2)"/>
+              <text x="550" y="150" text-anchor="middle" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#0F766E">stdout: {"ok":true,"status":"won","winner":"X",...}\n  (flush)</text>
+
+              <!-- Close -->
+              <line x1="170" y1="192" x2="922" y2="192" stroke="#475569" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#aB2)"/>
+              <text x="550" y="187" text-anchor="middle" font-size="11" fill="#475569">Close stdin (EOF) → clean process exit</text>
+            </svg>
+          </div>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>lean_spec/Main.lean (excerpt)</span>
+              </div>
+              <pre><span class="kw">partial def</span> <span class="fn">loop</span> (stdin stdout : <span class="ty">IO.FS.Stream</span>) : <span class="ty">IO</span> <span class="ty">Unit</span> := <span class="kw">do</span>
+  <span class="kw">let</span> line ← stdin.getLine
+  <span class="kw">if</span> line.isEmpty <span class="kw">then return</span> ()
+  <span class="kw">let</span> resp := <span class="kw">match</span> <span class="ty">Json</span>.parse line.trim &gt;&gt;= fromJson? <span class="kw">with</span>
+    | .ok (req : <span class="ty">PlayRequest</span>) => resultToJson (playMoves req.moves)
+    | .error err => ...
+  stdout.putStrLn resp.compress
+  stdout.flush   <span class="cm">-- critical: prevents pipe deadlock!</span>
+  loop stdin stdout</pre>
+            </div>
+
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>tests/conftest.py (excerpt)</span>
+              </div>
+              <pre><span class="kw">@pytest.fixture</span>(scope=<span class="st">"session"</span>)
+<span class="kw">def</span> <span class="fn">lean_oracle</span>():
+    <span class="kw">if not</span> ORACLE_BIN.exists():
+        pytest.skip(<span class="st">"Run: cd lean_spec &amp;&amp; lake build"</span>)
+    oracle = <span class="ty">LeanOracle</span>(ORACLE_BIN)
+    <span class="kw">try</span>:
+        <span class="kw">yield</span> oracle
+    <span class="kw">finally</span>:
+        oracle.close()</pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 11: STEP 6 - DIFFERENTIAL TESTING & BUG CATCH -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow"><span class="pill pill-red">Step 6 of 6</span> Differential Testing in Action</div>
+          <h2>Catching Bugs Unit Tests Miss (<code class="inline">test_differential.py</code>)</h2>
+          <p class="subtitle">Hypothesis explores both invalid/chaotic inputs and full legal games — then automatically shrinks any divergence to a minimal repro.</p>
+
+          <div class="grid-2">
+            <div class="code-box">
+              <div class="code-header">
+                <div class="code-dots"><span></span><span></span><span></span></div>
+                <span>tests/test_differential.py</span>
+              </div>
+              <pre><span class="cm"># Strategy 1: Chaotic sequences (bounds, duplicates, post-win)</span>
+<span class="kw">@settings</span>(max_examples=<span class="num">500</span>)
+<span class="kw">@given</span>(moves=st.lists(
+    st.integers(min_value=<span class="num">0</span>, max_value=<span class="num">11</span>),
+    max_size=<span class="num">12</span>,
+))
+<span class="kw">def</span> <span class="fn">test_random_move_sequences_match_lean_spec</span>(lean_oracle, moves):
+    <span class="kw">assert</span> play_moves(moves) == lean_oracle.play(moves)
+
+<span class="cm"># Strategy 2: Permutations of 0..8 (deep wins &amp; draws)</span>
+<span class="kw">@settings</span>(max_examples=<span class="num">500</span>)
+<span class="kw">@given</span>(moves=st.permutations(list(range(<span class="num">9</span>))))
+<span class="kw">def</span> <span class="fn">test_full_game_permutations_match_lean_spec</span>(lean_oracle, moves):
+    <span class="kw">for</span> k <span class="kw">in</span> range(len(moves) + <span class="num">1</span>):
+        seq = moves[:k]
+        <span class="kw">assert</span> play_moves(seq) == lean_oracle.play(seq)</pre>
+            </div>
+
+            <div class="svg-box">
+              <svg viewBox="0 0 500 375" xmlns="http://www.w3.org/2000/svg">
+                <rect x="8" y="8" width="484" height="358" rx="14" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
+                <text x="250" y="36" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0F172A">Hands-On Experiment: Delete Diagonal (2, 4, 6)</text>
+
+                <!-- Box 1: Bug injected -->
+                <rect x="28" y="54" width="444" height="58" rx="10" fill="#FFFFFF" stroke="#CBD5E1"/>
+                <text x="46" y="77" font-size="11.5" font-weight="700" fill="#475569">1. Subtle bug in tictactoe/game.py:</text>
+                <text x="46" y="98" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#E11D48">- (2, 4, 6),  # forgotten anti-diagonal win!</text>
+
+                <!-- Box 2: Unit tests pass -->
+                <rect x="28" y="126" width="444" height="54" rx="10" fill="#F0FDFA" stroke="#0D9488"/>
+                <text x="46" y="149" font-size="12" font-weight="700" fill="#0F766E">2. test_unit.py → 5 PASSED (False Confidence!)</text>
+                <text x="46" y="168" font-size="11" fill="#0F172A">Unit tests only checked top row (0, 1, 2) and draw.</text>
+
+                <!-- Box 3: Differential catches it -->
+                <rect x="28" y="194" width="444" height="154" rx="10" fill="#FFF1F2" stroke="#E11D48" stroke-width="1.8"/>
+                <text x="46" y="218" font-size="12" font-weight="700" fill="#BE123C">3. test_differential.py → FAILED &amp; SHRUNK!</text>
+                <text x="46" y="242" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#0F172A">Falsifying example: moves=[2, 0, 4, 1, 6]</text>
+                <text x="46" y="266" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#4338CA">Lean 4 Oracle: {"status": "won", "winner": "X"}</text>
+                <text x="46" y="288" font-size="11.5" font-family="JetBrains Mono, monospace" fill="#BE123C">Python Actual: {"status": "ongoing", "winner": null}</text>
+                <rect x="46" y="304" width="408" height="30" rx="6" fill="#FFFFFF"/>
+                <text x="250" y="323" text-anchor="middle" font-size="11" font-weight="600" fill="#0F172A">Hypothesis shrinks to the shortest 5-move counterexample automatically</text>
+              </svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 12: CI WORKFLOW & WHEN TO USE -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">05 / Production Adoption</div>
+          <h2>CI Pipeline &amp; Where to Apply This Pattern</h2>
+          <p class="subtitle">Integrate Lean 4 + Python cleanly in CI, and focus formal specs where bugs are most expensive.</p>
+
+          <!-- CI Pipeline SVG -->
+          <div class="svg-box" style="height: 118px; margin-bottom: 14px;">
+            <svg viewBox="0 0 1100 108" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <marker id="arrCI" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+                </marker>
+              </defs>
+              <rect x="12" y="14" width="235" height="78" rx="12" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.8"/>
+              <text x="129" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#4338CA">1. lake test</text>
+              <text x="129" y="63" text-anchor="middle" font-size="11" fill="#0F172A">Verify theorems &amp; #guard</text>
+              <text x="129" y="79" text-anchor="middle" font-size="10" fill="#475569">(Pinned via lean-toolchain)</text>
+
+              <line x1="247" y1="53" x2="290" y2="53" stroke="#475569" stroke-width="2" marker-end="url(#arrCI)"/>
+
+              <rect x="296" y="14" width="235" height="78" rx="12" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.8"/>
+              <text x="413" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#B45309">2. lake build</text>
+              <text x="413" y="63" text-anchor="middle" font-size="11" fill="#0F172A">Compile native Oracle CLI</text>
+              <text x="413" y="79" text-anchor="middle" font-size="10" fill="#475569">(Cache .lake in CI)</text>
+
+              <line x1="531" y1="53" x2="574" y2="53" stroke="#475569" stroke-width="2" marker-end="url(#arrCI)"/>
+
+              <rect x="580" y="14" width="235" height="78" rx="12" fill="#F0FDFA" stroke="#0D9488" stroke-width="1.8"/>
+              <text x="697" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#0F766E">3. uv run pytest</text>
+              <text x="697" y="63" text-anchor="middle" font-size="11" fill="#0F172A">Unit + Hypothesis Diff Tests</text>
+              <text x="697" y="79" text-anchor="middle" font-size="10" fill="#475569">(1000s of random cases)</text>
+
+              <line x1="815" y1="53" x2="858" y2="53" stroke="#475569" stroke-width="2" marker-end="url(#arrCI)"/>
+
+              <rect x="864" y="14" width="224" height="78" rx="12" fill="#0F172A"/>
+              <text x="976" y="46" text-anchor="middle" font-size="13" font-weight="700" fill="#81C995">✓ High-Assurance</text>
+              <text x="976" y="68" text-anchor="middle" font-size="11" fill="#E2E8F0">Release Ready</text>
+            </svg>
+          </div>
+
+          <div class="grid-2">
+            <div class="card-white">
+              <h3><span class="pill pill-green">High ROI</span> Best Fit for Lean 4 + Python</h3>
+              <ul class="clean green">
+                <li><strong>Authorization &amp; Policy Engines</strong> (RBAC / ABAC / IAM rules)</li>
+                <li><strong>Billing, Pricing &amp; Ledger Logic</strong> (discounts, quotas, balances)</li>
+                <li><strong>State Machines &amp; Workflows</strong> (order lifecycle, protocol states)</li>
+                <li><strong>Parsers, Serializers &amp; Compilers</strong> (round-trip &amp; equivalence)</li>
+              </ul>
+            </div>
+
+            <div class="card-white">
+              <h3><span class="pill pill-red">Low ROI</span> Stick to Regular <code class="inline">pytest</code></h3>
+              <ul class="clean red">
+                <li><strong>I/O Glue Code</strong> (REST handlers, DB queries, SDK wrappers)</li>
+                <li><strong>Simple CRUD &amp; UI</strong> (no complex invariants to prove)</li>
+                <li><strong>Heuristic / Fuzzy ML Outputs</strong> (no exact mathematical oracle)</li>
+              </ul>
+              <div class="callout" style="margin-top: auto;">
+                <strong>Try it locally:</strong> <code class="inline">cd lean_spec &amp;&amp; lake test &amp;&amp; lake build &amp;&amp; cd .. &amp;&amp; uv run pytest -v</code>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 19: HYPOTHESIS VS PLAUSIBLE POSITIONING -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">06 / Tooling Positioning</div>
+          <h2>Hypothesis vs. Plausible: Where Does Each Fit?</h2>
+          <p class="subtitle">Both are QuickCheck-style Property-Based Testing tools — but they test <strong>different layers</strong> at <strong>different stages</strong>.</p>
+
+          <!-- Workflow SVG -->
+          <div class="svg-box" style="height: 150px; margin-bottom: 14px;">
+            <svg viewBox="0 0 1100 142" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <marker id="arrP1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+                </marker>
+              </defs>
+
+              <!-- Stage 1: Plausible -->
+              <rect x="12" y="14" width="320" height="114" rx="12" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2" stroke-dasharray="6,4"/>
+              <text x="172" y="38" text-anchor="middle" font-size="11" font-weight="700" fill="#4338CA">STAGE 1 (OPTIONAL): INSIDE LEAN 4</text>
+              <text x="172" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="#0F172A">Plausible (by plausible)</text>
+              <text x="172" y="84" text-anchor="middle" font-size="11" fill="#475569">Sanity-check draft specs &amp; theorems</text>
+              <text x="172" y="102" text-anchor="middle" font-size="10.5" fill="#4338CA" font-weight="600">Finds counterexamples BEFORE proving</text>
+
+              <line x1="332" y1="71" x2="380" y2="71" stroke="#475569" stroke-width="2" marker-end="url(#arrP1)"/>
+
+              <!-- Stage 2: Proof -->
+              <rect x="386" y="14" width="290" height="114" rx="12" fill="#F0FDFA" stroke="#0D9488" stroke-width="2"/>
+              <text x="531" y="38" text-anchor="middle" font-size="11" font-weight="700" fill="#0F766E">STAGE 2: LEAN 4 KERNEL</text>
+              <text x="531" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="#0F172A">Formal Proofs (lake test)</text>
+              <text x="531" y="84" text-anchor="middle" font-size="11" fill="#475569">Prove invariants universally (∀)</text>
+              <text x="531" y="102" text-anchor="middle" font-size="10.5" fill="#0F766E" font-weight="600">Builds trusted native oracle</text>
+
+              <line x1="676" y1="71" x2="724" y2="71" stroke="#475569" stroke-width="2" marker-end="url(#arrP1)"/>
+
+              <!-- Stage 3: Hypothesis -->
+              <rect x="730" y="14" width="358" height="114" rx="12" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2.4"/>
+              <text x="909" y="38" text-anchor="middle" font-size="11" font-weight="700" fill="#B45309">STAGE 3 (CORE): PYTHON CI</text>
+              <text x="909" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="#0F172A">Hypothesis (uv run pytest)</text>
+              <text x="909" y="84" text-anchor="middle" font-size="11" fill="#475569">Differential Testing: Python ↔ Lean 4</text>
+              <text x="909" y="102" text-anchor="middle" font-size="10.5" fill="#B45309" font-weight="600">Guards production Python on every PR</text>
+            </svg>
+          </div>
+
+          <div class="grid-2">
+            <div class="card-white">
+              <h3><span class="pill pill-yellow">Core in Sample</span> Hypothesis (Python Side)</h3>
+              <ul class="clean yellow">
+                <li><strong>Target:</strong> Verifies that your <strong>Python production code</strong> matches the Lean 4 oracle.</li>
+                <li><strong>When it runs:</strong> Every local run &amp; CI pipeline (<code class="inline">uv run pytest</code>).</li>
+                <li><strong>Role:</strong> The primary engine driving Differential Testing in this sample.</li>
+              </ul>
+            </div>
+
+            <div class="card-white">
+              <h3><span class="pill pill-blue">Optional Power-Up</span> Plausible (Lean 4 Side)</h3>
+              <ul class="clean">
+                <li><strong>Target:</strong> Checks whether your <strong>Lean 4 spec / theorem statement</strong> is actually true before investing time proving it.</li>
+                <li><strong>Why omitted here:</strong> Intentionally excluded from our minimal Tic-Tac-Toe sample to keep <strong>zero external Lean dependencies</strong>.</li>
+                <li><strong>When to add:</strong> Add via Lake once your domain specs &amp; invariants grow complex.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SLIDE 20: SUMMARY & CTA LINKS -->
+        <!-- ============================================================ -->
+        <section class="slide">
+          <div class="eyebrow">07 / Summary &amp; Next Steps</div>
+          <h2>Key Takeaways &amp; Resources to Get Started</h2>
+          <p class="subtitle">Bring mathematical assurance to your Python codebase — without rewriting your app.</p>
+
+          <div class="grid-2">
+            <div style="display:flex; flex-direction:column; gap:11px;">
+              <div class="card-white">
+                <h3><span class="pill pill-yellow">1</span> Hypothesis Finds Bugs, Lean 4 Proves Truth</h3>
+                <p>Hypothesis excels at generating adversarial inputs and shrinking failures; Lean 4 eliminates the <strong>Test Oracle Problem</strong>.</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-blue">2</span> Dual Power: Kernel + Native Compiler</h3>
+                <p>Lean 4's kernel mathematically checks invariants (<code class="inline">lake test</code>), while its native compiler builds microsecond-fast oracles (<code class="inline">lake build</code>).</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-green">3</span> Keep Mapping Airtight</h3>
+                <p>Lock the JSON contract, check 100% branch coverage + mutation testing, and enforce sync in CI.</p>
+              </div>
+              <div class="card-white">
+                <h3><span class="pill pill-red">4</span> Start Small on the Critical 10–20%</h3>
+                <p>Apply this pattern to high-risk pure logic (AuthZ, billing, state machines) — keep I/O glue in normal <code class="inline">pytest</code>.</p>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div class="card" style="background: #F8FAFC;">
+                <h3>Explore Further (CTA Links)</h3>
+                <ul class="clean">
+                  <li>
+                    <strong>Lean 4 Official Documentation &amp; Language Reference</strong><br/>
+                    <a href="https://lean-lang.org/documentation/" target="_blank" rel="noopener" style="color: var(--g-blue-dark); text-decoration: none; font-weight: 500;">https://lean-lang.org/documentation/ ↗</a>
+                  </li>
+                  <li>
+                    <strong>Hypothesis — Property-Based Testing for Python</strong><br/>
+                    <a href="https://hypothesis.readthedocs.io/" target="_blank" rel="noopener" style="color: var(--g-blue-dark); text-decoration: none; font-weight: 500;">https://hypothesis.readthedocs.io/ ↗</a>
+                  </li>
+                  <li>
+                    <strong>AWS Cedar Formal Spec in Lean 4 (Production Reference)</strong><br/>
+                    <a href="https://github.com/cedar-policy/cedar-spec" target="_blank" rel="noopener" style="color: var(--g-blue-dark); text-decoration: none; font-weight: 500;">https://github.com/cedar-policy/cedar-spec ↗</a>
+                  </li>
+                  <li>
+                    <strong>Plausible — Property-Based Testing inside Lean 4</strong><br/>
+                    <a href="https://github.com/leanprover-community/plausible" target="_blank" rel="noopener" style="color: var(--g-blue-dark); text-decoration: none; font-weight: 500;">https://github.com/leanprover-community/plausible ↗</a>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="code-box" style="margin-top: auto;">
+                <div class="code-header">
+                  <div class="code-dots"><span></span><span></span><span></span></div>
+                  <span>Run the Tic-Tac-Toe Sample Now</span>
+                </div>
+                <pre><span class="cm"># 1. Verify proofs &amp; build Lean 4 oracle</span>
+cd lean_spec &amp;&amp; lake test &amp;&amp; lake build
+
+<span class="cm"># 2. Run Python unit + Hypothesis differential tests</span>
+cd .. &amp;&amp; uv sync &amp;&amp; uv run pytest -v</pre>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Footer Navigation -->
+      <footer class="footer">
+        <div class="footer-brand">
+          <span style="width:8px; height:8px; border-radius:50%; background:linear-gradient(135deg,#4F46E5,#0D9488); display:inline-block;"></span>
+          <span>Lean 4 + Python Differential Testing · <a href="https://x.com/kazunori_279" target="_blank" rel="noopener" style="color:var(--ink-2); text-decoration:none;">@kazunori_279</a></span>
+        </div>
+
+        <div class="nav-controls">
+          <a class="lang-btn" id="langSwitch" href="slides_ja.html">日本語</a>
+          <button class="nav-btn" id="prevBtn" aria-label="Previous slide">← Prev</button>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <span class="slide-num" id="slideNum">1 / 20</span>
+          <button class="nav-btn" id="nextBtn" aria-label="Next slide">Next →</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const slides = Array.from(document.querySelectorAll('.slide'));
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const progressFill = document.getElementById('progressFill');
+      const slideNum = document.getElementById('slideNum');
+      const langSwitch = document.getElementById('langSwitch');
+      let current = 0;
+
+      function render(index) {
+        current = Math.max(0, Math.min(slides.length - 1, index));
+        slides.forEach((el, i) => {
+          el.classList.toggle('active', i === current);
+          el.classList.toggle('prev', i < current);
+        });
+        prevBtn.disabled = current === 0;
+        nextBtn.disabled = current === slides.length - 1;
+        slideNum.textContent = `${current + 1} / ${slides.length}`;
+        progressFill.style.width = `${((current + 1) / slides.length) * 100}%`;
+        history.replaceState(null, '', `#${current + 1}`);
+        langSwitch.href = `slides_ja.html#${current + 1}`;
+      }
+
+      prevBtn.addEventListener('click', () => render(current - 1));
+      nextBtn.addEventListener('click', () => render(current + 1));
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+          e.preventDefault();
+          render(current + 1);
+        } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+          e.preventDefault();
+          render(current - 1);
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          render(0);
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          render(slides.length - 1);
+        }
+      });
+
+      const deck = document.querySelector('.deck');
+      function fitDeck() {
+        const pad = 28;
+        const scale = Math.min(
+          (window.innerWidth - pad) / 1280,
+          (window.innerHeight - pad) / 720,
+          1.25
+        );
+        deck.style.transform = `scale(${Math.max(0.25, scale)})`;
+      }
+      window.addEventListener('resize', fitDeck);
+      fitDeck();
+
+      const hashIdx = parseInt(location.hash.replace('#', ''), 10);
+      render(Number.isFinite(hashIdx) && hashIdx >= 1 ? hashIdx - 1 : 0);
+    })();
+  </script>
+</body>
+</html>
